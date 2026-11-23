@@ -21,7 +21,9 @@
     "@types/node": "^24",
     "experimental-a2": "0.24.0",
     "typescript": "^5.9.0",
-    "wrangler": "^4.166.0"
+    "wrangler": "^4.166.0",
+    "@board/auth-token": "workspace:*",
+    "@board/host-cloudflare": "workspace:*"
   },
   "dependencies": {
     "@vercel/board": "0.54.0",

@@ -1,0 +1,12 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "board",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // a2's log store imports node:sqlite; it runs on the object's SQLite through our stand-in.
+  "alias": { "node:sqlite": "../../packages/sql/src/node-sqlite.ts" },
+  "durable_objects": { "bindings": [{ "name": "BOARD", "class_name": "BoardObject" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BoardObject"] }],
+  "vars": { "BOARD_OWNER_ID": "token:user:pruett", "BOARD_OWNER_HANDLE": "pruett" }
+}

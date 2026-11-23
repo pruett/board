@@ -1,0 +1,2 @@
+{ "name": "@board/auth-token", "private": true, "type": "module",
+  "exports": { ".": "./src/index.ts" }, "dependencies": { "@vercel/board": "0.54.0" } }

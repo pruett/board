@@ -1,0 +1,5 @@
+{ "name": "@board/host-cloudflare", "private": true, "type": "module",
+  "scripts": { "dev": "wrangler dev --local", "deploy": "wrangler deploy" },
+  "dependencies": { "@vercel/board": "0.54.0", "effect": "4.1.5",
+    "@board/internals": "workspace:*", "@board/sql": "workspace:*", "@board/sql-do": "workspace:*",
+    "@board/auth-token": "workspace:*" } }
