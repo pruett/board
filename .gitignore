@@ -4,3 +4,6 @@ node_modules/
 dist/
 .dev.vars
 *.log
+spike/shot.png
+spike/prd.md
+spike/tail.*
