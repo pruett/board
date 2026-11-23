@@ -9,5 +9,11 @@
   "durable_objects": { "bindings": [{ "name": "BOARD", "class_name": "BoardObject" }] },
   "r2_buckets": [{ "binding": "FILES", "bucket_name": "board-files" }],
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BoardObject"] }],
-  "vars": { "BOARD_OWNER_ID": "token:user:pruett", "BOARD_OWNER_HANDLE": "pruett" }
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "BOARD_OWNER_ID": "token:user:pruett",
+    "BOARD_OWNER_HANDLE": "pruett",
+    "BOARD_PUBLIC_URL": "https://board.pruett.workers.dev/api/board"
+  }
 }

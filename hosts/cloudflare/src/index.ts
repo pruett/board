@@ -10,6 +10,7 @@ import { doSqlDriver } from "@board/sql-do"
 import { tokenAuth } from "@board/auth-token"
 import { r2Blob } from "@board/blob-r2"
 import { alarmScheduler, type AlarmScheduler } from "@board/scheduler-alarm"
+import { handleOps, OPS_PREFIX, opsAuthorized } from "./ops.ts"
 
 export interface Env {
   BOARD: DurableObjectNamespace<BoardObject>
@@ -21,6 +22,8 @@ export interface Env {
   BOARD_OWNER_ID: string
   /** That person's handle, e.g. `pruett`. */
   BOARD_OWNER_HANDLE: string
+  /** The Board's public URL, e.g. `https://board.pruett.workers.dev/api/board`. Board refuses requests without it outside local dev. */
+  BOARD_PUBLIC_URL?: string
 }
 
 /** The one object that holds the Board. */
@@ -41,12 +44,14 @@ export class BoardObject extends DurableObject<Env> {
       set: (at) => ctx.storage.setAlarm(at),
     })
     this.team = board({
+      ...(env.BOARD_PUBLIC_URL ? { url: env.BOARD_PUBLIC_URL } : {}),
       backend: a2({ store, scheduler: this.scheduler, blob: r2Blob(env.FILES) }),
       authenticate: tokenAuth(env.BOARD_TOKEN, { id: env.BOARD_OWNER_ID, handle: env.BOARD_OWNER_HANDLE }),
     })
   }
 
   override fetch(request: Request): Promise<Response> {
+    if (new URL(request.url).pathname.startsWith(OPS_PREFIX)) return handleOps(request, this.ctx)
     return this.team.fetch(request)
   }
 
@@ -57,7 +62,9 @@ export class BoardObject extends DurableObject<Env> {
 }
 
 export default {
-  fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    if (new URL(request.url).pathname.startsWith(OPS_PREFIX) && !opsAuthorized(request, env.BOARD_TOKEN))
+      return Response.json({ error: "unauthorized" }, { status: 401 })
     return env.BOARD.get(env.BOARD.idFromName(BOARD_NAME)).fetch(request)
   },
 } satisfies ExportedHandler<Env>

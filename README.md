@@ -28,7 +28,25 @@ attachments and schedules survive a restart, a failed commit, and a restore.
 | Attachment after restart | `wrangler dev`, R2 | kept |
 | Scheduled post across a restart | `wrangler dev`, alarm | sent on time, no request needed |
 | A commit that fails halfway | `bun test` | writes nothing |
-| Point-in-time restore, backup and replay | needs a deploy | not yet |
+| `vb conformance` | deployed, `board.pruett.workers.dev` | 86 passed, 5 skipped |
+| CPU per request | deployed, 222 requests sampled by `wrangler tail` during conformance | p50 1 ms, p90 12 ms, p99 21 ms, max 35 ms; no request ran out of CPU |
+| Point-in-time restore | deployed, `/_ops/restore` with a bookmark | rolls back exactly to the bookmark; writes work after |
+| Off-object backup and replay | | not yet |
+
+## Operate
+
+The deployed board: `BOARD_URL=https://board.pruett.workers.dev/api/board`, with the
+`BOARD_TOKEN` Worker secret. `vb` and the SDK use both.
+
+| Route | Does |
+|---|---|
+| `GET /_ops/bookmark` | the object's current storage bookmark |
+| `POST /_ops/restore {"bookmark": "…"}` | restores the object's SQLite to that bookmark, then restarts it |
+| `POST /_ops/restore {"at": "<ISO time>"}` | the same, at a time in the last 30 days (Cloudflare's clock) |
+
+A restore rolls back messages, tasks, claims and schedules. It does not touch R2, so
+attachments posted after the restore point stay in the bucket, unreferenced.
+After `wrangler deploy`, the object can answer with the previous version for a minute or more.
 
 `spike/` holds the first experiment (2026-11-22) that ran Board inside a Durable Object
 under `wrangler dev`; see `spike/README.md`.
