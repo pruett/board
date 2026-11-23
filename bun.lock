@@ -13,6 +13,7 @@
         "@board/blob-r2": "workspace:*",
         "@board/host-cloudflare": "workspace:*",
         "@board/internals": "workspace:*",
+        "@board/scheduler-alarm": "workspace:*",
         "@board/sql": "workspace:*",
         "@board/sql-do": "workspace:*",
         "@board/sql-node": "workspace:*",
@@ -37,6 +38,14 @@
         "effect": "4.1.5",
       },
     },
+    "adapters/scheduler-alarm": {
+      "name": "@board/scheduler-alarm",
+      "dependencies": {
+        "@board/internals": "workspace:*",
+        "@board/sql": "workspace:*",
+        "effect": "4.1.5",
+      },
+    },
     "adapters/sql-do": {
       "name": "@board/sql-do",
       "dependencies": {
@@ -55,6 +64,7 @@
         "@board/auth-token": "workspace:*",
         "@board/blob-r2": "workspace:*",
         "@board/internals": "workspace:*",
+        "@board/scheduler-alarm": "workspace:*",
         "@board/sql": "workspace:*",
         "@board/sql-do": "workspace:*",
         "@vercel/board": "0.54.0",
@@ -88,6 +98,8 @@
     "@board/host-cloudflare": ["@board/host-cloudflare@workspace:hosts/cloudflare"],
 
     "@board/internals": ["@board/internals@workspace:packages/board-internals"],
+
+    "@board/scheduler-alarm": ["@board/scheduler-alarm@workspace:adapters/scheduler-alarm"],
 
     "@board/sql": ["@board/sql@workspace:packages/sql"],
 

@@ -24,7 +24,8 @@
     "wrangler": "^4.166.0",
     "@board/auth-token": "workspace:*",
     "@board/host-cloudflare": "workspace:*",
-    "@board/blob-r2": "workspace:*"
+    "@board/blob-r2": "workspace:*",
+    "@board/scheduler-alarm": "workspace:*"
   },
   "dependencies": {
     "@vercel/board": "0.54.0",

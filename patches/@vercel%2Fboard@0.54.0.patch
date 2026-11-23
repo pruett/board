@@ -1,16 +1,16 @@
 diff --git a/dist/internals.mjs b/dist/internals.mjs
 new file mode 100644
-index 0000000000000000000000000000000000000000..13e6accf52850aa16ff6eaccb1aeb8ae2b800e02
+index 0000000000000000000000000000000000000000..0eae2b3c6ffad38230ea2f455b3fbf5b15f92156
 --- /dev/null
 +++ b/dist/internals.mjs
 @@ -0,0 +1,5 @@
 +// Added by pruett/board's patch: Board's backend parts, which 0.54.0 does not export.
-+export { a2, localScheduler, fsBlob, memoryBlob } from "./local-RoMUU6QX.mjs";
++export { a2, localScheduler, fsBlob, memoryBlob, deliverSchedulerAppend, deliverSchedulerClear } from "./local-RoMUU6QX.mjs";
 +export { r as sqlTables, n as ddl, t as TABLES_CONSUMER } from "./sql-D0MqINA6.mjs";
 +export { t as a2SqliteStore } from "./store-sqlite-D6fIszST.mjs";
 +export { t as sqliteDb } from "./sqlite-db-DjbTlUwN.mjs";
 diff --git a/dist/local-RoMUU6QX.mjs b/dist/local-RoMUU6QX.mjs
-index 5861f8b73f88efc70196a115d4a248ee359b724d..e24a4fffe64fba02788869659ddb935aa3066c2c 100644
+index 5861f8b73f88efc70196a115d4a248ee359b724d..4bfdc774d5a5e88dc7b4cfeeadfbcbbb3b22afee 100644
 --- a/dist/local-RoMUU6QX.mjs
 +++ b/dist/local-RoMUU6QX.mjs
 @@ -10636,4 +10636,4 @@ function local(options = {}) {
@@ -18,7 +18,7 @@ index 5861f8b73f88efc70196a115d4a248ee359b724d..e24a4fffe64fba02788869659ddb935a
  }
  //#endregion
 -export { local as t };
-+export { local as t, a2, localScheduler, fsBlob, memoryBlob };
++export { local as t, a2, localScheduler, fsBlob, memoryBlob, deliverSchedulerAppend, deliverSchedulerClear };
 diff --git a/dist/store-sqlite-D6fIszST.mjs b/dist/store-sqlite-D6fIszST.mjs
 index 63e208f549440addd2e0ff273b577350757cad6b..ebd7bb73425a1ffb370692518e44686f847aa58e 100644
 --- a/dist/store-sqlite-D6fIszST.mjs

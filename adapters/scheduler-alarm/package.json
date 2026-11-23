@@ -1,0 +1,3 @@
+{ "name": "@board/scheduler-alarm", "private": true, "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@board/internals": "workspace:*", "@board/sql": "workspace:*", "effect": "4.1.5" } }

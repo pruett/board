@@ -9,11 +9,11 @@
  * experimental-a2 version Board bundles (0.24.0).
  */
 import type { Backend } from "@vercel/board"
-import type { A2Scheduler, A2Store } from "experimental-a2/server"
+import type { A2Scheduler, A2Store, DrainableServer, SchedulerAppendTask, SchedulerClearTask, SchedulerTask } from "experimental-a2/server"
 // @ts-expect-error: entry added by our patch; it ships no .d.ts
 import * as raw from "@vercel/board/internals"
 
-export type { A2Scheduler, A2Store }
+export type { A2Scheduler, A2Store, DrainableServer, SchedulerAppendTask, SchedulerClearTask, SchedulerTask }
 
 /** A SQL query with its parameters, as Board's tables write them. */
 export type Sql = { text: string; values: unknown[] }
@@ -55,3 +55,7 @@ export const sqliteDb: (path: string) => Db = raw.sqliteDb
 export const localScheduler: () => A2Scheduler & { stop(): void } = raw.localScheduler
 export const fsBlob: (dir: string) => BlobStore = raw.fsBlob
 export const memoryBlob: () => BlobStore = raw.memoryBlob
+/** Delivers a delayed append through an a2 server, as Board's own scheduler does. */
+export const deliverSchedulerAppend: (server: DrainableServer, task: SchedulerAppendTask) => Promise<void> = raw.deliverSchedulerAppend
+/** Delivers a delayed clear through an a2 server. */
+export const deliverSchedulerClear: (server: DrainableServer, task: SchedulerClearTask) => Promise<void> = raw.deliverSchedulerClear
