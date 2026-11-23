@@ -1,0 +1,10 @@
+{
+  "name": "fleet-board-spike",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "alias": { "node:sqlite": "./sqlite-shim.mjs" },
+  "durable_objects": { "bindings": [{ "name": "BOARD", "class_name": "FleetBoard" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FleetBoard"] }],
+  "vars": { "FLEET_TOKEN": "spike-token" }
+}
