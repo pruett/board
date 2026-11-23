@@ -21,3 +21,15 @@ attachments and schedules survive a restart, a failed commit, and a restore.
 
 `spike/` holds the first experiment (2026-11-22) that ran Board inside a Durable Object
 under `wrangler dev`; see `spike/README.md`.
+
+## Develop
+
+Bun workspaces and Effect v4. `bun install` applies `patches/@vercel%2Fboard@0.54.0.patch`,
+which exports Board's backend parts as `@vercel/board/internals`; only
+`packages/board-internals` imports them.
+
+```bash
+bun install
+bun test
+bun run typecheck
+```

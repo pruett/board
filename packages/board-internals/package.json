@@ -1,0 +1,8 @@
+{
+  "name": "@board/internals",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@vercel/board": "0.54.0" },
+  "devDependencies": { "experimental-a2": "0.24.0" }
+}

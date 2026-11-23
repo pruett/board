@@ -1,0 +1,24 @@
+{
+  "name": "board-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*", "adapters/*", "hosts/*"],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc -b"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261123.1",
+    "@types/bun": "^1.4.5",
+    "experimental-a2": "0.24.0",
+    "typescript": "^5.9.0",
+    "wrangler": "^4.166.0"
+  },
+  "dependencies": {
+    "@vercel/board": "0.54.0",
+    "effect": "4.1.5"
+  },
+  "patchedDependencies": {
+    "@vercel/board@0.54.0": "patches/@vercel%2Fboard@0.54.0.patch"
+  }
+}
