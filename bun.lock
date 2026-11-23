@@ -10,6 +10,7 @@
       },
       "devDependencies": {
         "@board/auth-token": "workspace:*",
+        "@board/blob-r2": "workspace:*",
         "@board/host-cloudflare": "workspace:*",
         "@board/internals": "workspace:*",
         "@board/sql": "workspace:*",
@@ -29,6 +30,13 @@
         "@vercel/board": "0.54.0",
       },
     },
+    "adapters/blob-r2": {
+      "name": "@board/blob-r2",
+      "dependencies": {
+        "@board/internals": "workspace:*",
+        "effect": "4.1.5",
+      },
+    },
     "adapters/sql-do": {
       "name": "@board/sql-do",
       "dependencies": {
@@ -45,6 +53,7 @@
       "name": "@board/host-cloudflare",
       "dependencies": {
         "@board/auth-token": "workspace:*",
+        "@board/blob-r2": "workspace:*",
         "@board/internals": "workspace:*",
         "@board/sql": "workspace:*",
         "@board/sql-do": "workspace:*",
@@ -73,6 +82,8 @@
   },
   "packages": {
     "@board/auth-token": ["@board/auth-token@workspace:adapters/auth-token"],
+
+    "@board/blob-r2": ["@board/blob-r2@workspace:adapters/blob-r2"],
 
     "@board/host-cloudflare": ["@board/host-cloudflare@workspace:hosts/cloudflare"],
 

@@ -23,7 +23,8 @@
     "typescript": "^5.9.0",
     "wrangler": "^4.166.0",
     "@board/auth-token": "workspace:*",
-    "@board/host-cloudflare": "workspace:*"
+    "@board/host-cloudflare": "workspace:*",
+    "@board/blob-r2": "workspace:*"
   },
   "dependencies": {
     "@vercel/board": "0.54.0",

@@ -4,13 +4,16 @@
  */
 import { DurableObject } from "cloudflare:workers"
 import { board } from "@vercel/board"
-import { a2, a2SqliteStore, localScheduler, memoryBlob, sqlTables } from "@board/internals"
+import { a2, a2SqliteStore, localScheduler, sqlTables } from "@board/internals"
 import { boardDb, registerDriver } from "@board/sql"
 import { doSqlDriver } from "@board/sql-do"
 import { tokenAuth } from "@board/auth-token"
+import { r2Blob } from "@board/blob-r2"
 
 export interface Env {
   BOARD: DurableObjectNamespace<BoardObject>
+  /** Attachments, under `files/`. */
+  FILES: R2Bucket
   /** A Worker secret: `wrangler secret put BOARD_TOKEN`; `.dev.vars` locally. */
   BOARD_TOKEN: string
   /** Who the token belongs to, e.g. `token:user:pruett`. Not `board:`, which Board reserves. */
@@ -32,8 +35,8 @@ export class BoardObject extends DurableObject<Env> {
     registerDriver(path, driver)
     const store = { log: a2SqliteStore({ path }), tables: sqlTables(boardDb(driver)), close: async () => {} }
     this.team = board({
-      // TODO(blob-r2, scheduler-alarm): memoryBlob and localScheduler lose attachments and timers on restart.
-      backend: a2({ store, scheduler: localScheduler(), blob: memoryBlob() }),
+      // TODO(scheduler-alarm): localScheduler keeps timers in memory, so they are lost on restart.
+      backend: a2({ store, scheduler: localScheduler(), blob: r2Blob(env.FILES) }),
       authenticate: tokenAuth(env.BOARD_TOKEN, { id: env.BOARD_OWNER_ID, handle: env.BOARD_OWNER_HANDLE }),
     })
   }

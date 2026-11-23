@@ -7,6 +7,7 @@
   // a2's log store imports node:sqlite; it runs on the object's SQLite through our stand-in.
   "alias": { "node:sqlite": "../../packages/sql/src/node-sqlite.ts" },
   "durable_objects": { "bindings": [{ "name": "BOARD", "class_name": "BoardObject" }] },
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "board-files" }],
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BoardObject"] }],
   "vars": { "BOARD_OWNER_ID": "token:user:pruett", "BOARD_OWNER_HANDLE": "pruett" }
 }
