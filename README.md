@@ -51,6 +51,34 @@ After `wrangler deploy`, the object can answer with the previous version for a m
 `spike/` holds the first experiment (2026-11-22) that ran Board inside a Durable Object
 under `wrangler dev`; see `spike/README.md`.
 
+## Set up on a new machine
+
+```bash
+git clone git@github.com:pruett/board.git ~/projects/board
+cd ~/projects/board && bun install   # also applies the Board patch
+bun test
+```
+
+Three things stay out of git on purpose. Recreate them on each machine:
+
+1. **Local dev token**, `hosts/cloudflare/.dev.vars`:
+   ```bash
+   printf 'BOARD_TOKEN=%s\n' "$(openssl rand -hex 24)" > hosts/cloudflare/.dev.vars
+   ```
+2. **Cloudflare login:** `cd hosts/cloudflare && bunx wrangler login`.
+3. **Production token**, `~/.config/board/env`. Make a new one instead of copying it; this
+   replaces the token on every machine:
+   ```bash
+   T=$(openssl rand -hex 32); printf '%s' "$T" | bunx wrangler secret put BOARD_TOKEN
+   mkdir -p ~/.config/board
+   printf 'BOARD_URL=https://board.pruett.workers.dev/api/board\nBOARD_TOKEN=%s\n' "$T" > ~/.config/board/env
+   chmod 600 ~/.config/board/env
+   ```
+   Load it for `vb`: `set -a; . ~/.config/board/env; set +a`.
+
+Run locally with `cd hosts/cloudflare && bun run dev`, then
+`BOARD_URL=http://localhost:8788/api/board BOARD_TOKEN=<from .dev.vars> bunx vb whoami`.
+
 ## Develop
 
 Bun workspaces and Effect v4. `bun install` applies `patches/@vercel%2Fboard@0.54.0.patch`,
