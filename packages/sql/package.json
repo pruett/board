@@ -1,0 +1,3 @@
+{ "name": "@board/sql", "private": true, "type": "module",
+  "exports": { ".": "./src/index.ts", "./node-sqlite": "./src/node-sqlite.ts" },
+  "dependencies": { "@board/internals": "workspace:*" } }

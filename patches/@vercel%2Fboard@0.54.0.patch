@@ -19,8 +19,21 @@ index 5861f8b73f88efc70196a115d4a248ee359b724d..e24a4fffe64fba02788869659ddb935a
  //#endregion
 -export { local as t };
 +export { local as t, a2, localScheduler, fsBlob, memoryBlob };
+diff --git a/dist/store-sqlite-D6fIszST.mjs b/dist/store-sqlite-D6fIszST.mjs
+index 63e208f549440addd2e0ff273b577350757cad6b..ebd7bb73425a1ffb370692518e44686f847aa58e 100644
+--- a/dist/store-sqlite-D6fIszST.mjs
++++ b/dist/store-sqlite-D6fIszST.mjs
+@@ -342,6 +342,8 @@ function sqlite(options = {}) {
+ 		if (!cursor || toNumber(cursor.head) !== cause.index || Number(cursor.attempt_count) !== cause.attempt || cursor.failed_at !== null) throw supersededAttemptError(sessionId, cause);
+ 	};
+ 	const tx = (fn) => {
++		// pruett/board patch: a host whose SQLite runs transactions itself (a Durable Object) gives transactionSync.
++		if (typeof db.transactionSync === "function") return db.transactionSync(fn);
+ 		db.exec("begin immediate");
+ 		try {
+ 			const result = fn();
 diff --git a/package.json b/package.json
-index 0ccfe051f45a8c7e54fe25685510c8b5a653210b..df86edd6ad2c58c4a847c447f854cc9072c4e1dc 100644
+index 0ccfe051f45a8c7e54fe25685510c8b5a653210b..6cb6ef37531199364daf75414bacb48a6541fb99 100644
 --- a/package.json
 +++ b/package.json
 @@ -79,7 +79,11 @@

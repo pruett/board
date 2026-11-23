@@ -2,14 +2,23 @@
   "name": "board-workspace",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*", "adapters/*", "hosts/*"],
+  "workspaces": [
+    "packages/*",
+    "adapters/*",
+    "hosts/*"
+  ],
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc -b"
   },
   "devDependencies": {
+    "@board/internals": "workspace:*",
+    "@board/sql": "workspace:*",
+    "@board/sql-do": "workspace:*",
+    "@board/sql-node": "workspace:*",
     "@cloudflare/workers-types": "^5.20261123.1",
     "@types/bun": "^1.4.5",
+    "@types/node": "^24",
     "experimental-a2": "0.24.0",
     "typescript": "^5.9.0",
     "wrangler": "^4.166.0"
