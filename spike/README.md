@@ -38,8 +38,8 @@ Worker bundle: 1.94 MB, 387 KB gzip (`wrangler deploy --dry-run`).
 - Client: `BOARD_URL=https://<worker>/api/board BOARD_TOKEN=… vb …`, or `board()` from
   `@vercel/board` in `scripts/fleet`.
 
-Spike files (scratch, may be cleared): the session scratchpad `spike/` folder: `spike-a.sh`,
-`spike-b.sh`, `do/worker.mjs`, `do/sqlite-shim.mjs`, `do/wrangler.jsonc`, `conf-do.txt`.
+Spike files, in this folder: `spike-a.sh`,
+`spike-b.sh`, `worker.mjs`, `sqlite-shim.mjs`, `wrangler.jsonc`.
 
 ## Gaps
 
