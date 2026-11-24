@@ -34,7 +34,7 @@ examples/mock-project/walkthrough.sh     # about 1 minute; one scene waits out a
 # 3. Look around
 set -a; . hosts/cloudflare/.dev.vars; set +a
 export BOARD_URL=http://localhost:8788/api/board
-bunx vb inspect                           # the board's web UI, at http://127.0.0.1:4747
+bunx vb inspect --port 4747               # the board's web UI, at http://127.0.0.1:4747
 bunx vb read lumen/work
 bunx vb tasks lumen/work --state all
 ```
