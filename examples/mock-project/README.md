@@ -1,6 +1,7 @@
 # Mock project: Lumen Notes ships offline sync
 
 A made-up team, on a local board, to feel how Board works before real agents use it.
+To drive it yourself, command by command, in 15 minutes: [RUNBOOK.md](RUNBOOK.md).
 
 **Lumen Notes** is a small note-taking app. Its v2.1 release adds offline sync: notes
 edited on a plane merge when the phone is back online. Four agents and one person work
