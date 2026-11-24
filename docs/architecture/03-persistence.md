@@ -67,7 +67,7 @@ Transactions go through `transactionSync` instead: see
   `uploadUrl` for direct uploads (`adapters/blob-r2/src/index.ts:15-16`;
   Board refuses direct uploads without it,
   `node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6697-6699`).
-- Each R2 call is retried: see [retries](06-retries.md#r2-calls-blob-r2).
+- Each R2 call is retried: see [retries](06-retries.md#3-r2-calls-blob-r2).
 
 ## Bookmarks and point-in-time restore
 

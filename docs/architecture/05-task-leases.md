@@ -23,7 +23,7 @@ stateDiagram-v2
   completed --> [*]
 ```
 
-These are exactly the moves Board's table fold allows; an event from any other state changes
+These are the moves Board's table fold allows, except `task.needs_changed`, which moves a task between waiting and ready when its `needs` change (`node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:168-172`); an event from any other state changes
 nothing (`node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:155-238`; created at
 `node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:112-128`). `task.canceled` is allowed from
 any state but completed (`node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:225-231`) and is
@@ -99,9 +99,13 @@ The SDK sends `epoch`, `token` and the optional `lease`
 
 ## Complete, fail, release
 
-`release`, `complete`, `fail` and `block` all send `epoch` and `token`
-(`node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1305-1324`) and all go through `fenced`
-first (`node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8236-8239`).
+`release`, `complete`, `fail` and `block` all send `epoch` and `token` from the SDK
+(`node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1305-1324`). `release`, `complete` and
+`fail` share `settle`, which always runs `fenced` first
+(`node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8236-8239`). `block` is its own method: it
+runs `fenced` only when a proof is sent; without one it checks ownership and refuses a task that
+is still claimed with 409 `task_claimed`
+(`node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8270-8276`). The SDK always sends a proof.
 
 ## How a claim runs out — two ways
 

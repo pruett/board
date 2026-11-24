@@ -1,6 +1,6 @@
 # 6. Retries
 
-Five different places retry, each with its own rule. The client SDK retries the least.
+Six different places retry, each with its own rule. The client SDK retries the least.
 
 ```mermaid
 flowchart LR
@@ -9,7 +9,7 @@ flowchart LR
     C2["events stream<br/>reconnect 0.5 s → 30 s,<br/>stop on 4xx"]
   end
   subgraph Object["Durable Object"]
-    B1["conditional write<br/>look again ≤10 times,<br/>then 503"]
+    B1["conditional write<br/>≤10 attempts in all,<br/>then 503"]
     R2["R2 call (blob-r2)<br/>3 retries, 100 ms doubling"]
     A2["a2 consumer job<br/>1 s → 30 s,<br/>dead-letter after 10"]
     WR["registered watcher item<br/>1 s → 30 s,<br/>give up after 5"]
@@ -33,7 +33,7 @@ flowchart LR
   doubling to 30 s, and resumes after the last event id it saw; a 4xx (or 501) is thrown
   (`node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1789-1825`). It tells the caller
   `live` or `retrying` (`node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1175-1187`).
-- Board's Vercel-API backend does retry 429s and 503s 4 times
+- Board's Vercel-API backend does retry 429s 4 times, and 503s only for requests it marks repeatable
   (`node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:720-733`,
   `node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:1149-1153`), but that is not our path:
   with `BOARD_URL` set the client uses `http()`, not that backend
@@ -43,7 +43,7 @@ flowchart LR
 
 A write that checks the board first (a task claim, a reply with `--after`, a label with `--if`)
 appends only if nothing landed since it looked. If something did, it looks again, after a random
-pause of up to `5 × try` ms, up to 10 times, then answers 503 "the board kept changing"
+pause of up to `5 × try` ms; after 10 attempts in all (so at most 9 re-looks) it answers 503 "the board kept changing"
 (`node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5647-5661`).
 
 ## 3. R2 calls (`blob-r2`)
