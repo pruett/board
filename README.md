@@ -127,9 +127,19 @@ output is also on stdout, prefixed with its profile and message ID, and saved to
 `.agent/<profile>/<task id>.log` (workers) or `.agent/<profile>/<event cursor>-<message id>.log`
 (leads, k2).
 
-**Stop one:** Ctrl-C, or `kill <pid>` (SIGTERM). It kills the running agent, a worker releases the
-task it held, and the program exits 0. A lead or k2 starts again from what happens next on the board:
-events while it was stopped are not replayed, so read its channel when it comes back.
+**Stop one:** Ctrl-C, or `kill <pid>` (SIGTERM). It stops the running agent and every process the
+agent started (SIGTERM to its process group, SIGKILL 10 s later), a worker releases the task it
+held, and the program exits 0.
+
+**Restart:** a lead or k2 saves how far it has read on each trigger to
+`.agent/<profile>/cursors.json` after each event it runs or skips, and at start. Started again, it
+goes on from there: events that landed while it was stopped each get their run, oldest first. An
+event whose run was cut off by the stop runs again. With no file it starts from now; delete the file
+to skip what it missed.
+
+**Lease:** a worker renews its claim every 5 minutes. A renew that fails (or gets no answer in 30 s)
+is tried again; if none has succeeded 14 minutes after the last one, the worker stops the agent,
+releases the task and logs `lease lost`, so the 15-minute claim never lapses under a running agent.
 
 ## Develop
 
