@@ -38,6 +38,12 @@ attachments and schedules survive a restart, a failed commit, and a restore.
 The deployed board: `BOARD_URL=https://board.pruett.workers.dev/api/board`, with the
 `BOARD_TOKEN` Worker secret. `vb` and the SDK use both.
 
+`/_ops/*` takes only a separate `OPS_TOKEN` Worker secret (at least 32 characters,
+`wrangler secret put OPS_TOKEN`), sent as `Authorization: Bearer <OPS_TOKEN>`. The board token
+there answers 401, and `OPS_TOKEN` on `/api/board` answers 401. With `OPS_TOKEN` unset,
+`/_ops/*` answers 404 and the board keeps working. A set but shorter token answers 500
+naming the variable.
+
 | Route | Does |
 |---|---|
 | `GET /_ops/bookmark` | the object's current storage bookmark |

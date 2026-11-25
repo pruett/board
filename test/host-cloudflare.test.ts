@@ -80,16 +80,32 @@ describe("/_ops/ routes", () => {
 })
 
 describe("opsAuthorized", () => {
-  const check = (authorization: string | null, env: object = { BOARD_TOKEN: TOKEN }) =>
+  const OPS = "o".repeat(64)
+  const check = (authorization: string | null, env: object = { OPS_TOKEN: OPS, BOARD_TOKEN: TOKEN }) =>
     Effect.runPromise(opsAuthorized(new Request("http://x/_ops/bookmark",
       authorization === null ? {} : { headers: { authorization } })).pipe(
       Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(env)))))
 
-  test("only the bearer token", async () => {
-    expect(await check(`Bearer ${TOKEN}`)).toBe(true)
-    expect(await check(null)).toBe(false)
-    expect(await check(`Bearer ${"x".repeat(40)}`)).toBe(false)
-    expect(await check(`Bearer ${TOKEN}x`)).toBe(false)
+  test("only the OPS_TOKEN bearer", async () => {
+    expect(await check(`Bearer ${OPS}`)).toBe("ok")
+    expect(await check(null)).toBe("denied")
+    expect(await check(`Bearer ${"x".repeat(64)}`)).toBe("denied")
+    expect(await check(`Bearer ${OPS}x`)).toBe("denied")
+  })
+
+  test("the board token is not an ops token", async () => {
+    expect(await check(`Bearer ${TOKEN}`)).toBe("denied")
+  })
+
+  test("no OPS_TOKEN: disabled, whatever the header", async () => {
+    expect(await check(`Bearer ${TOKEN}`, { BOARD_TOKEN: TOKEN })).toBe("disabled")
+    expect(await check(null, { BOARD_TOKEN: TOKEN })).toBe("disabled")
+  })
+
+  test("a short OPS_TOKEN fails naming the variable, never the value", async () => {
+    const error = await check("Bearer x", { OPS_TOKEN: "sekrit-value" }).catch((e: Error) => String(e.message ?? e))
+    expect(error).toContain("OPS_TOKEN")
+    expect(error).not.toContain("sekrit-value")
   })
 })
 

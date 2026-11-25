@@ -1,6 +1,8 @@
 /**
- * Operator routes under `/_ops/`, the same bearer token as the Board. They reach
- * Cloudflare's point-in-time restore, which only code inside the object can call.
+ * Operator routes under `/_ops/`, behind their own `OPS_TOKEN` bearer secret: the Board's
+ * token does not open them. They reach Cloudflare's point-in-time restore, which only code
+ * inside the object can call. Without `OPS_TOKEN` set they answer 404, so the operator surface
+ * does not exist (and is not hinted at, as a 503 would) until it is configured.
  *
  *   GET  /_ops/bookmark              the storage's current bookmark
  *   POST /_ops/restore {"at": iso}         restore SQLite as it was at `at` (last 30 days), then restart
@@ -83,13 +85,21 @@ export const makeOpsHandler: Effect.Effect<
 const OPS_PATHS = new Set(["/_ops/bookmark", "/_ops/restore"])
 const noSuchOperation = () => Response.json({ error: "no such operation" }, { status: 404 })
 
+const OpsToken = Schema.String.check(
+  Schema.isMinLength(32, { message: "use a token of at least 32 characters" }),
+)
+
 /**
  * The Worker checks the token for `/_ops/` itself: Board's auth does not see these routes.
- * Reads `BOARD_TOKEN` as a Redacted value; the compare takes the same time wherever it differs.
+ * Reads `OPS_TOKEN` as a Redacted value, at least 32 characters; the compare takes the same
+ * time wherever it differs. `"disabled"` when `OPS_TOKEN` is unset; a set but short one fails
+ * with a ConfigError that names the variable, never the value.
  */
 export const opsAuthorized = Effect.fn("ops.authorized")(function* (request: Request) {
-  const token = yield* Config.Redacted("BOARD_TOKEN")
-  return timingSafeEqual(request.headers.get("authorization") ?? "", `Bearer ${Redacted.value(token)}`)
+  const present = yield* Config.option(Config.Redacted("OPS_TOKEN"))
+  if (present._tag === "None") return "disabled" as const
+  const token = yield* Config.schema(Schema.Redacted(OpsToken), "OPS_TOKEN")
+  return timingSafeEqual(request.headers.get("authorization") ?? "", `Bearer ${Redacted.value(token)}`) ? "ok" as const : "denied" as const
 })
 
 function timingSafeEqual(a: string, b: string): boolean {

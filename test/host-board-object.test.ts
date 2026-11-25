@@ -109,18 +109,45 @@ describe("acceptance: actual BoardObject startup and reset", () => {
     } finally { await h.close() }
   })
 
-  test("the Worker returns JSON 401 without or with a wrong token, and forwards the right one", async () => {
-    const h = harness()
+  test("the Worker answers /_ops/ only to OPS_TOKEN: 401 for none, a wrong one or the board token", async () => {
+    const OPS = "ab".repeat(32)
+    const h = harness({ OPS_TOKEN: OPS })
     try {
       await h.ready()
-      for (const authorization of [null, "Bearer wrong", "Bearer " + TOKEN]) {
+      for (const authorization of [null, "Bearer wrong", "Bearer " + TOKEN, "Bearer " + OPS]) {
         const response = await worker.fetch(new Request("http://x/_ops/bookmark", {
           ...(authorization === null ? {} : { headers: { authorization } }),
         }), h.env)
-        expect(response.status).toBe(authorization === "Bearer " + TOKEN ? 200 : 401)
-        expect(await response.json()).toEqual(authorization === "Bearer " + TOKEN ? { forwarded: true } : { error: "unauthorized" })
+        expect(response.status).toBe(authorization === "Bearer " + OPS ? 200 : 401)
+        expect(await response.json()).toEqual(authorization === "Bearer " + OPS ? { forwarded: true } : { error: "unauthorized" })
       }
       expect(h.forwarded()).toBe(1)
+    } finally { await h.close() }
+  })
+
+  test("without OPS_TOKEN /_ops/ is 404 for every caller, and the board routes still forward", async () => {
+    const h = harness()
+    try {
+      await h.ready()
+      for (const authorization of [null, "Bearer " + TOKEN]) {
+        const response = await worker.fetch(new Request("http://x/_ops/bookmark", {
+          ...(authorization === null ? {} : { headers: { authorization } }),
+        }), h.env)
+        expect(response.status).toBe(404)
+      }
+      const board = await worker.fetch(new Request("http://x/api/board", { headers: { authorization: "Bearer " + TOKEN } }), h.env)
+      expect(board.status).toBe(200)
+      expect(h.forwarded()).toBe(1)
+    } finally { await h.close() }
+  })
+
+  test("OPS_TOKEN on /api/board is 401: it is not a board token", async () => {
+    const OPS = "ab".repeat(32)
+    const h = harness({ OPS_TOKEN: OPS })
+    try {
+      await h.ready()
+      const response = await h.object.fetch(new Request("http://x/api/board/channels", { headers: { authorization: "Bearer " + OPS } }))
+      expect(response.status).toBe(401)
     } finally { await h.close() }
   })
 })

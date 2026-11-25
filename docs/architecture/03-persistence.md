@@ -106,7 +106,9 @@ sequenceDiagram
   (`hosts/cloudflare/src/ops.ts:55`); a storage call that throws answers 500
   `{"error": "operation failed"}` and logs the cause (`hosts/cloudflare/src/ops.ts:68-72`).
   Local `wrangler dev` has no point-in-time recovery, so restore answers that 500 there.
-- The Worker checks the token for these routes, in constant time
+- The Worker checks a separate `OPS_TOKEN` secret (at least 32 characters) for these routes, in
+  constant time. The board token answers 401; with `OPS_TOKEN` unset every `/_ops/` path
+  answers 404, so the surface does not exist until it is configured
   (`hosts/cloudflare/src/index.ts:87-92`, `hosts/cloudflare/src/ops.ts:82-96`).
 - Restore rolls back messages, tasks, claims and schedules, because they are all in SQLite. It
   does not touch R2, so files uploaded after the restore point stay in the bucket with nothing
