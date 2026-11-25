@@ -10,10 +10,51 @@ index 0000000000000000000000000000000000000000..0eae2b3c6ffad38230ea2f455b3fbf5b
 +export { t as a2SqliteStore } from "./store-sqlite-D6fIszST.mjs";
 +export { t as sqliteDb } from "./sqlite-db-DjbTlUwN.mjs";
 diff --git a/dist/local-RoMUU6QX.mjs b/dist/local-RoMUU6QX.mjs
-index 5861f8b73f88efc70196a115d4a248ee359b724d..4bfdc774d5a5e88dc7b4cfeeadfbcbbb3b22afee 100644
+index 5861f8b73f88efc70196a115d4a248ee359b724d..333b8b854ca42262d3865bc2e2ecb73066380783 100644
 --- a/dist/local-RoMUU6QX.mjs
 +++ b/dist/local-RoMUU6QX.mjs
-@@ -10636,4 +10636,4 @@ function local(options = {}) {
+@@ -7664,9 +7664,12 @@ function createTasks(options) {
+ 		throw new HttpError(403, "task_not_owned", `#${root.id} is someone else's task: its owner as itself, the profile that made it, or manage in ${root.channel}, changes it`);
+ 	}
+ 	/** Refuses a write whose claim is over: released, settled, held, taken over, or past its lease. It never says who holds the task now. */
+-	function fenced(root, proof) {
++	function fenced(root, proof, identity) {
+ 		const { task } = root;
+ 		if (!(task.state === "claimed" && task.epoch === proof.epoch && Date.parse(task.claim.until) > Date.now() && hashes(proof.token, task.claim.token))) throw conflict("claim_lost", `this claim on #${root.id} is over: claim it again`);
++		// pruett/board patch: a claim's proof works only for the principal that claimed (its actor, less any `+profile`), not for another token that has the proof.
++		const { actor } = task.claim, { id } = identity.principal;
++		if (actor !== id && !actor.startsWith(`${id}+`)) throw conflict("claim_not_held", `this claim on #${root.id} isn't yours: claim it yourself`);
+ 	}
+ 	/**
+ 	* Whether `identity` is who a task is assigned to: its owner's principal, writing as that actor.
+@@ -8213,7 +8216,7 @@ function createTasks(options) {
+ 			await taskOf(identity.principal.access, id);
+ 			const made = { until: "" };
+ 			const root = await changeTask(identity, id, (found) => {
+-				fenced(found, proof);
++				fenced(found, proof, identity);
+ 				made.until = new Date(Date.now() + leaseOf(lease)).toISOString();
+ 				return [{
+ 					type: "task.renewed",
+@@ -8236,7 +8239,7 @@ function createTasks(options) {
+ 		async settle(identity, id, proof, how) {
+ 			await taskOf(identity.principal.access, id);
+ 			return { task: await shown(identity, await changeTask(identity, id, async (found, position) => {
+-				fenced(found, proof);
++				fenced(found, proof, identity);
+ 				const about = {
+ 					id,
+ 					thread: found.thread,
+@@ -8272,7 +8275,7 @@ function createTasks(options) {
+ 			if (!input.proof) owns(identity, task);
+ 			const { proof } = input;
+ 			return { task: await shown(identity, await changeTask(identity, id, (found) => {
+-				if (proof) fenced(found, proof);
++				if (proof) fenced(found, proof, identity);
+ 				else {
+ 					const state = stateNow(found.task, Date.now());
+ 					if (state === "claimed") throw conflict("task_claimed", `#${id} is claimed until ${found.task.claim.until}: only its claim holds it`);
+@@ -10636,4 +10639,4 @@ function local(options = {}) {
  	};
  }
  //#endregion
