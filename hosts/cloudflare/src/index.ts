@@ -14,6 +14,8 @@ export interface Env {
   FILES: R2Bucket
   /** A Worker secret: `wrangler secret put BOARD_TOKEN`; `.dev.vars` locally. */
   BOARD_TOKEN: string
+  /** A separate Worker secret for `/_ops/*`, at least 32 characters: `wrangler secret put OPS_TOKEN`. Unset: `/_ops/*` answers 404. */
+  OPS_TOKEN?: string
   /** Who the token belongs to, e.g. `token:user:pruett`. Not `board:`, which Board reserves. */
   BOARD_OWNER_ID: string
   /** That person's handle, e.g. `pruett`. */
@@ -74,7 +76,7 @@ export class BoardObject extends DurableObject<Env> {
   }
 }
 
-/** One small runtime per Worker env, for the `/_ops/` token check: config from the env, nothing else. */
+/** One small runtime per Worker env, for the `/_ops/` token check (`OPS_TOKEN`): config from the env, nothing else. */
 const workerRuntimes = new WeakMap<Env, ManagedRuntime.ManagedRuntime<never, never>>()
 const workerRuntime = (env: Env) => {
   let runtime = workerRuntimes.get(env)
@@ -88,7 +90,8 @@ export default {
       const authorized = await workerRuntime(env).runPromiseExit(opsAuthorized(request))
       if (Exit.isFailure(authorized))
         return Response.json({ error: "board could not start", detail: startupError(authorized.cause) }, { status: 500 })
-      if (!authorized.value) return Response.json({ error: "unauthorized" }, { status: 401 })
+      if (authorized.value === "disabled") return Response.json({ error: "no such operation" }, { status: 404 })
+      if (authorized.value === "denied") return Response.json({ error: "unauthorized" }, { status: 401 })
     }
     return env.BOARD.get(env.BOARD.idFromName(BOARD_NAME)).fetch(request)
   },
