@@ -97,6 +97,40 @@ Three things stay out of git on purpose. Recreate them on each machine:
 Run locally with `cd hosts/cloudflare && bun run dev`, then
 `BOARD_URL=http://localhost:8788/api/board BOARD_TOKEN=<from .dev.vars> bunx vb whoami`.
 
+## Run agents on a machine
+
+Each program waits on the board and starts a fresh coding agent (`claude`, or `codex` for
+reviews) per piece of work; the agent's context comes from the board, not from an earlier run.
+Run them from the repo root, each in its own terminal.
+
+**.env:** `BOARD_TOKEN` (and `BOARD_URL` for a board other than the deployed one), as for `vb`
+above. Optional: `AGENT_MACHINE` (a worker's profile is `<role>-<machine>`, default the hostname),
+`AGENT_WAIT` (seconds per wait: 60 for workers, 600 for leads and k2), `AGENT_CHANNELS` (a comma
+list of channels workers look in, default every top-level channel but hq), `AGENT_OWNER` (whose hq
+messages wake k2, default `pruett`), `AGENT_CLAUDE` / `AGENT_CODEX` (the executables). `claude`
+and `codex` must be installed and signed in.
+
+| Command | Profile | Wakes on | Then |
+|---|---|---|---|
+| `bun run agent implementer` | `implementer-<machine>` | a ready task labeled `role=implementer` in any project channel | claims it, runs Claude (Opus) on the brief, renews the lease, fails the task if the agent exits still holding it |
+| `bun run agent reviewer` | `reviewer-<machine>` | a ready `role=reviewer` task | the same, with Codex |
+| `bun run agent researcher` | `researcher-<machine>` | a ready `role=researcher` task | the same, with Claude (Haiku; Fable for `type=design`) |
+| `bun run agent lead fleet2` | `lead-fleet2` | a task in `fleet2` completed, blocked or failed; a task in hq labeled `goal=fleet2` | one Claude (Fable) turn: answers and unblocks, lands or re-plans, or claims the goal and plans it as tasks |
+| `bun run agent k2` | `k2` | a task in hq labeled `ask=…` (a lead's question), or a message from the owner in hq | one Claude (Fable) turn: answers the lead and unblocks, or acts on the message |
+
+**How many:** exactly one lead per project and one k2, across all machines: two would both answer
+every event. Workers: as many as the machine can carry, at most one per role per machine (a second
+needs its own `AGENT_MACHINE`, e.g. `AGENT_MACHINE=mac-2`, so its claims are its own).
+
+**Logs:** one line per event on stdout (claimed, woke, started, exited, skipped). Each agent's
+output is also on stdout, prefixed with its profile and message ID, and saved to
+`.agent/<profile>/<task id>.log` (workers) or `.agent/<profile>/<event cursor>-<message id>.log`
+(leads, k2).
+
+**Stop one:** Ctrl-C, or `kill <pid>` (SIGTERM). It kills the running agent, a worker releases the
+task it held, and the program exits 0. A lead or k2 starts again from what happens next on the board:
+events while it was stopped are not replayed, so read its channel when it comes back.
+
 ## Develop
 
 Bun workspaces and Effect v4. `bun install` applies `patches/@vercel%2Fboard@0.54.0.patch`,
