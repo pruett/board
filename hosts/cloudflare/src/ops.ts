@@ -20,9 +20,9 @@ export class OpsStorage extends Context.Service<
 /** Restarts the object (the host disposes its runtime, then `ctx.abort`s), so the next request opens the restored database. */
 export class ObjectReset extends Context.Service<ObjectReset, { reset(reason: string): void }>()("board/ObjectReset") {}
 
-/** A restore target: a bookmark from `/_ops/bookmark`, or a time. With both, the bookmark wins. */
+/** A restore target: a bookmark from `/_ops/bookmark`, or a time. With both, the bookmark wins and `at` is echoed. */
 export const RestoreBody = Schema.Union([
-  Schema.Struct({ bookmark: Schema.NonEmptyString }),
+  Schema.Struct({ bookmark: Schema.NonEmptyString, at: Schema.optional(Schema.DateFromString) }),
   Schema.Struct({ at: Schema.DateFromString }),
 ])
 
@@ -49,7 +49,7 @@ const restore = HttpRouter.route("POST", "/_ops/restore", Effect.gen(function* (
   yield* Effect.promise(() => storage.onNextSessionRestoreBookmark(bookmark))
   // Restart after this answer is sent; the next request opens the restored database.
   yield* Effect.sleep("50 millis").pipe(Effect.andThen(Effect.sync(() => reset("restoring to " + bookmark))), Effect.forkDetach)
-  return HttpServerResponse.jsonUnsafe({ restoring: bookmark, ...("at" in target ? { at: target.at.toISOString() } : {}) })
+  return HttpServerResponse.jsonUnsafe({ restoring: bookmark, ...(target.at ? { at: target.at.toISOString() } : {}) })
 }))
 
 const notFound = HttpRouter.route("*", "/_ops/*", HttpServerResponse.jsonUnsafe({ error: "no such operation" }, { status: 404 }))
@@ -76,8 +76,12 @@ export const makeOpsHandler: Effect.Effect<
     OpsStorage | ObjectReset,
     OpsStorage | ObjectReset | Scope.Scope | HttpServerRequest.HttpServerRequest
   >(ctx)(http)
-  return (request) => handler(request)
+  // Exact paths only: the router also matches case variants, a trailing slash and doubled slashes.
+  return (request) => OPS_PATHS.has(new URL(request.url).pathname) ? handler(request) : Promise.resolve(noSuchOperation())
 })
+
+const OPS_PATHS = new Set(["/_ops/bookmark", "/_ops/restore"])
+const noSuchOperation = () => Response.json({ error: "no such operation" }, { status: 404 })
 
 /**
  * The Worker checks the token for `/_ops/` itself: Board's auth does not see these routes.
