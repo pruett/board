@@ -8,3 +8,8 @@ spike/shot.png
 spike/prd.md
 spike/tail.*
 tsconfig.tsbuildinfo
+
+# Secrets: .env is per checkout and never committed; .env.example is the template
+.env
+.env.*
+!.env.example

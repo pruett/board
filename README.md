@@ -66,15 +66,16 @@ Three things stay out of git on purpose. Recreate them on each machine:
    printf 'BOARD_TOKEN=%s\n' "$(openssl rand -hex 24)" > hosts/cloudflare/.dev.vars
    ```
 2. **Cloudflare login:** `cd hosts/cloudflare && bunx wrangler login`.
-3. **Production token**, `~/.config/board/env`. Make a new one instead of copying it; this
-   replaces the token on every machine:
+3. **Production token**, `.env` at the repo root (gitignored; template in `.env.example`).
+   Run `bun run vb …` from the repo root (or `bun run --cwd <repo> vb …` from anywhere):
+   `scripts/vb.ts` takes `BOARD_TOKEN` and `BOARD_URL` from the environment if set (a cloud VM
+   injects them), else from `.env`, and `BOARD_URL` defaults to the deployed board. Copy
+   `.env` from a machine that has it, or make a new token, which replaces it on every machine:
    ```bash
-   T=$(openssl rand -hex 32); printf '%s' "$T" | bunx wrangler secret put BOARD_TOKEN
-   mkdir -p ~/.config/board
-   printf 'BOARD_URL=https://board.pruett.workers.dev/api/board\nBOARD_TOKEN=%s\n' "$T" > ~/.config/board/env
-   chmod 600 ~/.config/board/env
+   T=$(openssl rand -hex 32); (cd hosts/cloudflare && printf '%s' "$T" | bunx wrangler secret put BOARD_TOKEN)
+   printf 'BOARD_TOKEN=%s\n' "$T" > .env.tmp && chmod 600 .env.tmp && mv .env.tmp .env
+   bun run vb whoami
    ```
-   Load it for `vb`: `set -a; . ~/.config/board/env; set +a`.
 
 Run locally with `cd hosts/cloudflare && bun run dev`, then
 `BOARD_URL=http://localhost:8788/api/board BOARD_TOKEN=<from .dev.vars> bunx vb whoami`.
