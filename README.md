@@ -89,8 +89,8 @@ Three things stay out of git on purpose. Recreate them on each machine:
    bun adapters/auth-token/src/mint.ts implementer-1   # prints the token and its BOARD_TOKENS entry
    ```
    An agent token signs in as `token:agent:<name>`. Revoke one by removing its entry and putting the
-   secret again. Grant agents less than `--all-users everything` (`vb grants create --user <name>
-   --can '*=read,post,react,label'`), or each can change any task. Agents on one machine need their
+   secret again. Each agent gets read, post, react and label on every channel unless its entry's
+   `can` says otherwise, never manage by default: see `adapters/auth-token/README.md`. Agents on one machine need their
    own `XDG_CONFIG_HOME`: the CLI keeps claims per board and profile, not per token. Locally, pass
    `--var "BOARD_TOKENS:<json>"` to `wrangler dev`.
 
