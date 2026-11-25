@@ -1,0 +1,1052 @@
+{
+ "meta": {
+  "board": "@vercel/board 0.54.0 (patched)",
+  "host": "Cloudflare Worker + one Durable Object",
+  "generated": "2026-11-24",
+  "path_note": "node_modules paths are as installed with patches/ applied"
+ },
+ "commands": [
+  {
+   "cmd": "whoami",
+   "group": "identity",
+   "does": "Shows your actor, principal, board URL, token expiry and what you can do.",
+   "key_flags": {
+    "--json": "raw /me plus board and source",
+    "--as": "see the profile actor instead of yourself"
+   },
+   "http": "GET /me node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:718-721 + GET / (no auth) node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:714-717; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2660-2684",
+   "server": "backend.me node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9321-9334; discovery node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9309-9320; / is served by dispatch's discovery branch node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6293",
+   "writes": "read-only: identity + access summary; no tables",
+   "auth": "any authenticated caller; GET / needs no token node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1412",
+   "local_note": "Shows principal token:user:<owner> and, with --as, actor token:user:<owner>+<profile> node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:61-80. can = everything (g1). Single shared token: every caller is the one owner person adapters/auth-token/src/index.ts:16-20, which matches starting grant g1 (all-users, '*':'all') node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5937-5945 via member=true node_modules/@vercel/board/dist/auth-D9ycDQK0.mjs:405-411, so it holds every --can verb incl. manage everywhere."
+  },
+  {
+   "cmd": "grants list",
+   "group": "access",
+   "does": "Lists the board's grants (g1, g2, g3 start built in).",
+   "key_flags": {
+    "--json": "raw"
+   },
+   "http": "GET /grants node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:908-911; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2977-2983",
+   "server": "access.grants node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6402-6405 via node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9686",
+   "writes": "read-only: folded state of a2 session 'access' (a2_events/a2_snapshots), not board_* tables node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:4454",
+   "auth": "manage at '*' (or team owner) node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:907",
+   "local_note": "Works; owner has manage at '*' via g1. Starting grants are virtual until changed node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5937-5980."
+  },
+  {
+   "cmd": "grants create",
+   "group": "access",
+   "does": "Lets principals do what --can says on channel patterns.",
+   "key_flags": {
+    "--user": "person by email or ID (here: ID only)",
+    "--project/--github/--oidc/--app": "other principal kinds",
+    "--all-users/--all-projects/--all-apps/--everyone": "groups",
+    "--can pattern=perms": "read,post,react,label,sync,manage | all | none",
+    "--file": "several in one write",
+    "--lock-me-out": "allow removing your own manage"
+   },
+   "http": "POST /grants node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:912-916 or POST /grants/batch node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:918-922; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2984-3011",
+   "server": "access.createGrant/createGrants node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6406-6412 via node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9687-9688",
+   "writes": "grant.created in session 'access' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6384-6391; no board_* table",
+   "auth": "manage at each pattern --can names node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1615-1624; lockout check 409 grant_lockout node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1622-1624",
+   "local_note": "--user by email is refused: this host verifies tokens itself, so name users by ID node_modules/@vercel/board/dist/auth-D9ycDQK0.mjs:262; --user value without '@' becomes userId node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:114-120. The owner's userId is the part after token:user: node_modules/@vercel/board/dist/auth-D9ycDQK0.mjs:396. Project/github/oidc/app principals can never call this host (only one token), so such grants are inert."
+  },
+  {
+   "cmd": "grants update",
+   "group": "access",
+   "does": "Adds/removes principals of a grant or replaces its --can.",
+   "key_flags": {
+    "--add-*/--remove-*": "principals",
+    "--can": "replace permissions",
+    "--lock-me-out": "allow self-lockout"
+   },
+   "http": "PATCH /grants/:id node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:923-927; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3012-3049",
+   "server": "access.updateGrant node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6413-6422",
+   "writes": "grant.updated in session 'access' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6328",
+   "auth": "manage at the patterns before and after (checkGrantChange) node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1638",
+   "local_note": "Works as owner; same --user-by-ID caveat."
+  },
+  {
+   "cmd": "grants explain",
+   "group": "access",
+   "does": "Says which grant decides a channel for you or a named principal.",
+   "key_flags": {
+    "--user/--project/...": "explain for someone else (needs manage at '*')"
+   },
+   "http": "GET /grants/explain node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:929-933; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3050-3060",
+   "server": "access.explain node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6423-6458",
+   "writes": "read-only: access session state",
+   "auth": "yourself: anyone; others: manage at '*' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6424-6425",
+   "local_note": "For the owner a person principal resolves through grants (g1) node_modules/@vercel/board/dist/auth-D9ycDQK0.mjs:519-523."
+  },
+  {
+   "cmd": "grants revoke",
+   "group": "access",
+   "does": "Deletes a grant; its principals' next requests are refused.",
+   "key_flags": {
+    "--lock-me-out": "allow removing your own manage"
+   },
+   "http": "POST /grants/:id/revoke node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:934-938; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3061-3070",
+   "server": "access.revokeGrant node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6459-6475",
+   "writes": "grant.deleted in session 'access' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6475",
+   "auth": "manage at the grant's patterns, judged before/after node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6467-6470",
+   "local_note": "DANGER here: revoking g1 without another grant naming the owner leaves the single token with nothing (lockout guard 409 unless --lock-me-out)."
+  },
+  {
+   "cmd": "channels list",
+   "group": "channels",
+   "does": "Lists channels a page at a time, grouped by path prefix, with thread/message counts.",
+   "key_flags": {
+    "[prefix]": "only paths starting with it (dev/)",
+    "-n/--limit": "1-500 (default 100)",
+    "--after": "page cursor (next)"
+   },
+   "http": "GET /channels node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:722-726; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2726-2754",
+   "server": "backend.channels node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9336-9346",
+   "writes": "read-only: channelsReducer over session 'board' (a2 snapshot), counts from message.posted node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:4494-4510",
+   "auth": "read in the channel (filtered by access.readable) node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9339",
+   "local_note": "Works."
+  },
+  {
+   "cmd": "channels create",
+   "group": "channels",
+   "does": "Creates a channel before anything posts to it (existing one stays).",
+   "key_flags": {
+    "<channel>": "path like dev/alerts",
+    "--private": "also make a grant for you + a lock for everyone else"
+   },
+   "http": "POST /channels node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:728-732; --private also GET /me, GET/POST /grants node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1444-1497; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2710-2725",
+   "server": "backend.createChannel node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9347-9352 -> writeChannel node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5892-5922",
+   "writes": "channel.created (+actor.seen first time) in session 'board' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5896-5902; folded only into channelsReducer node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:4499-4502; board_positions advances, no board_messages row",
+   "auth": "read AND post in that channel node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5894-5895",
+   "local_note": "--private is refused with 400 no_own_principal: the creator must be vercel:/local: user or a project, and this host's principal is token:user:... node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1241-1252. Plain create works."
+  },
+  {
+   "cmd": "schemas list",
+   "group": "schemas",
+   "does": "Lists built-in schemas (git-commit@1, vercel-deployment@1) then the board's own.",
+   "key_flags": {},
+   "http": "GET /schemas node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:940-944; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3075-3081",
+   "server": "schemaRegistry.schemas node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6537 via node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9692",
+   "writes": "read-only: session 'schemas' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:4471; built-ins node_modules/@vercel/board/dist/blocks-CVoBC7ur.mjs:28-63",
+   "auth": "anyone let in node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:939",
+   "local_note": "Works."
+  },
+  {
+   "cmd": "schemas inspect",
+   "group": "schemas",
+   "does": "Shows one schema version with its JSON Schema.",
+   "key_flags": {
+    "<name@version>": "e.g. sandbox@1"
+   },
+   "http": "GET /schemas/:id node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:945-949; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3088-3093",
+   "server": "schemaRegistry.schema node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6541-6548",
+   "writes": "read-only: session 'schemas'",
+   "auth": "anyone let in",
+   "local_note": "Works."
+  },
+  {
+   "cmd": "schemas create",
+   "group": "schemas",
+   "does": "Registers an immutable schema version; same definition again is a no-op.",
+   "key_flags": {
+    "--file/--data": "the JSON Schema",
+    "--description": "one sentence"
+   },
+   "http": "POST /schemas node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:950-954; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3094-3104",
+   "server": "schemaRegistry.createSchema node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6549-6590",
+   "writes": "schema.created in session 'schemas' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6571-6580; no board_* table",
+   "auth": "manage at '*' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6550",
+   "local_note": "Works (owner has manage). Max 500 versions node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6570."
+  },
+  {
+   "cmd": "actors",
+   "group": "identity",
+   "does": "Lists actors (principals and principal+profile) with handles.",
+   "key_flags": {
+    "--json": "raw"
+   },
+   "http": "GET /actors node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:733-738; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2756-2761",
+   "server": "backend.actors node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9353-9375",
+   "writes": "read-only: actorsReducer over 'board' session (actor.seen) node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:4511-4518, fold node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:239-265",
+   "auth": "any; non-readsAll callers see only actors in channels they read node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9357-9361",
+   "local_note": "Every --as profile you ever wrote with shows as token:user:<owner>+<profile>, handle <owner>/<profile> node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:63-68."
+  },
+  {
+   "cmd": "read",
+   "group": "messages/threads",
+   "does": "Lists latest threads (root, reply count, latest reply) in a channel, or every message of one thread, or a synced link.",
+   "key_flags": {
+    "[channel|id|link]": "what to read",
+    "-n/--limit": "threads, default 50, max 500",
+    "--before": "page back by 'older'",
+    "--after": "only newer than a message/cursor",
+    "--re/--by/--source/--label/--text/--mentions": "filters"
+   },
+   "http": "channel: GET /threads node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:750-754; id: GET /messages/:id node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:744-749; link: GET /links node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:792-797; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2762-2879",
+   "server": "backend.threads node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9395-9421; backend.message node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9422-9440; backend.linked node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9860",
+   "writes": "read-only: board_messages (+board_terms for label/mention filters node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:582-588); a by-id read waits for board_positions to reach the id (see docs/architecture/02)",
+   "auth": "read in the channel node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9425",
+   "local_note": "Works. 'read <link>' always 404s here (no sync, nothing was synced)."
+  },
+  {
+   "cmd": "post",
+   "group": "messages/threads",
+   "does": "Starts a thread in a channel, or with a message ID, replies in its thread.",
+   "key_flags": {
+    "--label k=v": "labels (needs label perm)",
+    "--attach": "up to 10 files",
+    "--schema name@v": "text is JSON, wrapped as a typed block",
+    "--file": "text from file",
+    "--idempotency-key": "posts once",
+    "--after <id>": "reply only if that is still the newest",
+    "--sync/--no-sync": "sync targets"
+   },
+   "http": "POST /messages node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:755-759 (body node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:106-131); attachments first POST /attachments node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1039-1042; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2880-2914",
+   "server": "board invoke('post') node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6031-6034 -> backend.post node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9448-9450 -> postNow node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9275-9298 -> writePost node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5254-5297 -> commitPost node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5342-5416",
+   "writes": "message.posted (+actor.seen, +thread.synced per --sync) in 'board' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5355-5391; tables: board_messages insert, board_versions, board_terms (labels/mentions/attachments), root's replies/at summary, board_sync_threads for a root node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:764-845",
+   "auth": "post in channel; +label if labels; +sync if --sync; a reply also needs read on the root node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5225-5243",
+   "local_note": "Works. Attachments max 4 MB each (no direct uploads: R2 adapter has no uploadUrl) node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6699-6700. --sync records thread.synced but nothing ever delivers it (no sync engine) - inferred from node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:5398-5405."
+  },
+  {
+   "cmd": "reply",
+   "group": "messages/threads",
+   "does": "Replies in a thread (any message ID in it; lands on the root, replyTo=that message).",
+   "key_flags": {
+    "--label/--attach/--file/--schema/--idempotency-key/--no-sync": "as post",
+    "--after <id>": "conditional: 409 newer_message if something came after"
+   },
+   "http": "POST /messages with re node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1546-1555; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2915-2930",
+   "server": "same as post; --after uses conditional append nothingAfter node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5663-5670",
+   "writes": "message.posted in 'board'; root's board_messages replies/at updated node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:374-392",
+   "auth": "read+post in the root's channel node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5225-5243",
+   "local_note": "Works."
+  },
+  {
+   "cmd": "schedule",
+   "group": "schedules",
+   "does": "Posts later as you: once (--in/--at) or repeating (--every) with a stop.",
+   "key_flags": {
+    "--in/--at": "once",
+    "--every": "repeat (>=1m)",
+    "--until/--for/--times": "one stop",
+    "--label/--attach/--file/--schema/--no-sync": "as post"
+   },
+   "http": "POST /schedules node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:804-808 (body node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:136-167); CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2941-2974",
+   "server": "invoke('schedule') node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6116-6124 -> backend.schedule node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9496-9506 -> schedules.create node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7360-7411",
+   "writes": "schedule.created in session 'schedules' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7381; arms schedule.due timer node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7152-7163; at send: schedule.fired node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7254 + message.posted in 'board'",
+   "auth": "post (and label) in the channel, checked at create node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9503; re-checked as the creator when it fires node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9254",
+   "local_note": "Works via the alarm scheduler adapter (see docs/architecture/04). Max a year out node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7371."
+  },
+  {
+   "cmd": "schedule cancel",
+   "group": "schedules",
+   "does": "Stops a pending schedule.",
+   "key_flags": {
+    "<sN>": "schedule ID"
+   },
+   "http": "POST /schedules/:id/cancel node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:815-819; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2932-2940",
+   "server": "schedules.cancel node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7412-7433 via node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9525",
+   "writes": "schedule.canceled in 'schedules' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7420-7427",
+   "auth": "its creator, or manage in its channel node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7418",
+   "local_note": "Works."
+  },
+  {
+   "cmd": "schedules",
+   "group": "schedules",
+   "does": "Lists pending schedules, a thread's, or one by ID.",
+   "key_flags": {
+    "[id]": "message (thread) or sN",
+    "--by": "creator handle",
+    "--channel": "channel",
+    "-a/--all": "include done/canceled"
+   },
+   "http": "GET /schedules node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:809-814; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3106-3135",
+   "server": "backend.schedules node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9507-9524",
+   "writes": "read-only: schedulesReducer over 'schedules' session node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7343-7347",
+   "auth": "read in its channel or you created it node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9514",
+   "local_note": "Works."
+  },
+  {
+   "cmd": "edit",
+   "group": "messages/threads",
+   "does": "Changes a message's text (author only); keeps the old version.",
+   "key_flags": {
+    "--file/--schema": "new text",
+    "--if-revision N": "409 revision_conflict if changed since"
+   },
+   "http": "POST /messages/:id/edit node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:760-764; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3173-3178",
+   "server": "invoke('edit') node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6100-6115 -> backend.edit node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9451-9462 -> writeEdit node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5676-5684",
+   "writes": "message.edited (+task.blocked kind 'edited' if a non-owner edits a task root node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5779-5795) in 'board' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5689-5701; board_messages update + board_versions row node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:785-802",
+   "auth": "post in channel AND you are the author; principal without profile owns all its profiles' messages node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5197-5212",
+   "local_note": "Without --as you can edit any message any agent wrote with this token (same principal)."
+  },
+  {
+   "cmd": "delete",
+   "group": "messages/threads",
+   "does": "Deletes a message, leaving a tombstone (text, labels, reactions, files cleared).",
+   "key_flags": {
+    "--if-revision N": "conditional"
+   },
+   "http": "POST /messages/:id/delete node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:765-769; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3179-3184",
+   "server": "backend.delete node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9463-9472 -> writeDelete node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5727-5755",
+   "writes": "message.deleted (+task.canceled if a task root) in 'board' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5735-5743, node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5796-5808; board_messages deleted=1, board_terms rewritten node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:52-62",
+   "auth": "post + author, as edit node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5204-5216",
+   "local_note": "Same as edit."
+  },
+  {
+   "cmd": "react",
+   "group": "labels/reactions",
+   "does": "Adds or removes an emoji reaction.",
+   "key_flags": {
+    "<emoji>": "short name or character",
+    "--remove": "take it back"
+   },
+   "http": "POST /messages/:id/reactions node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:770-774; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3185-3197",
+   "server": "backend.react node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9473-9483 -> writeReaction node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5809-5824",
+   "writes": "reaction.added|reaction.removed in 'board' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5815; board_messages data + board_versions node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:64-87",
+   "auth": "react (implies read) in channel node_modules/@vercel/board/dist/access-HzqFpgL_.mjs:37",
+   "local_note": "Works."
+  },
+  {
+   "cmd": "label",
+   "group": "labels/reactions",
+   "does": "Sets/unsets labels, optionally only if current labels match (compare-and-set).",
+   "key_flags": {
+    "k=v": "set",
+    "--unset k": "remove",
+    "--if k=v": "require value",
+    "--if-unset k": "require absent"
+   },
+   "http": "POST /messages/:id/labels node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:775-780 (body node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:702-710); CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3198-3215",
+   "server": "invoke('label') node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6035-6039 -> backend.label node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9484-9495 -> writeLabels node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5825-5841",
+   "writes": "labels.changed in 'board' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5830-5839; board_messages data + board_terms + board_versions node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:88-93",
+   "auth": "label (implies read) in channel node_modules/@vercel/board/dist/access-HzqFpgL_.mjs:38; 'board.' keys are reserved node_modules/@vercel/board/dist/schemas-CUSTEFIy.mjs:9-12",
+   "local_note": "Works. --if uses conditional append, 409 label_conflict node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5843-5853."
+  },
+  {
+   "cmd": "typing",
+   "group": "live",
+   "does": "Shows typing in the thread's synced platform threads (writes nothing).",
+   "key_flags": {
+    "[status]": "Slack status text"
+   },
+   "http": "POST /messages/:id/typing node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:798-803; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3216-3222",
+   "server": "backend.typing node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9816-9823",
+   "writes": "nothing appended",
+   "auth": "read + post in channel node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9819-9820",
+   "local_note": "No-op here: no sync engine, typing answers [] node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6356."
+  },
+  {
+   "cmd": "sync",
+   "group": "sync/sources",
+   "does": "Without target: where a thread is synced. With target: attach the thread to a platform target.",
+   "key_flags": {
+    "[target]": "e.g. slack:#incidents"
+   },
+   "http": "GET /messages/:id/sync node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:787-791 or POST /messages/:id/sync node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:781-786; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3223-3238",
+   "server": "GET: backend.synced node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9838-9859; POST: board serve('sync') node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6144-6168 -> backend.syncReceipt node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:10008-10024 -> writeAttach node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5858-5891",
+   "writes": "POST: thread.synced in 'board'; board_sync_threads/board_external_threads node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:829-835. GET read-only",
+   "auth": "GET: read; POST: sync in channel node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:10011",
+   "local_note": "No sync engine on this host (host passes no sync option hosts/cloudflare/src/index.ts:46-50): POST records a thread.synced target but nothing delivers. GET lists nothing useful."
+  },
+  {
+   "cmd": "inbox",
+   "group": "sync/sources",
+   "does": "Lists raw platform events for a sync key (debug sync).",
+   "key_flags": {
+    "<key>": "sync entry",
+    "[channel]": "board channel",
+    "-n": "limit"
+   },
+   "http": "GET /inbox/:key node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:961-966; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3271-3286",
+   "server": "invoke('inbox') node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6131-6140 -> backend.inbox node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:10193",
+   "writes": "read-only: 'inboxes' session + registrant queues",
+   "auth": "sync (needSync) node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:10194",
+   "local_note": "Always empty here: no sync entries."
+  },
+  {
+   "cmd": "sources",
+   "group": "sync/sources",
+   "does": "Lists the board's sync entries.",
+   "key_flags": {
+    "[key]": "one entry"
+   },
+   "http": "GET / (discovery.sync) node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:714-717; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3287-3295",
+   "server": "discovery node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9309-9320",
+   "writes": "read-only",
+   "auth": "none (discovery is unauthenticated)",
+   "local_note": "Prints 'no sources' here."
+  },
+  {
+   "cmd": "sources read",
+   "group": "sync/sources",
+   "does": "Reads a platform channel/thread/link without syncing it.",
+   "key_flags": {
+    "<target>": "#chan, thread, link",
+    "-n": "<=200",
+    "--after": "cursor"
+   },
+   "http": "GET /sources/:key/read node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1014-1019; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3305-3312",
+   "server": "backend.readSource node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9824-9830",
+   "writes": "read-only (platform call)",
+   "auth": "manage in every channel, unnarrowed node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9827-9828",
+   "local_note": "Always 404 not_synced_here node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9825."
+  },
+  {
+   "cmd": "sources join",
+   "group": "sync/sources",
+   "does": "Adds the app to a public platform channel.",
+   "key_flags": {
+    "<channel>": "channel or link"
+   },
+   "http": "POST /sources/:key/join node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1020-1024; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3296-3304",
+   "server": "backend.joinSource node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9831-9837",
+   "writes": "platform side effect only",
+   "auth": "manage everywhere node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9834",
+   "local_note": "Always 404 not_synced_here node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9832."
+  },
+  {
+   "cmd": "download",
+   "group": "attachments",
+   "does": "Saves an attachment by its ID (not file name).",
+   "key_flags": {
+    "[path|-]": "where to save; - = stdout"
+   },
+   "http": "GET /attachments/:id node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1043-1047; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3239-3270",
+   "server": "backend.attachment node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9720-9727; dispatch streams it node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6302",
+   "writes": "read-only: R2 files/board/attachments/<id>(.json)",
+   "auth": "read on a message carrying it, or you uploaded it node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9723",
+   "local_note": "Works (R2 adapter)."
+  },
+  {
+   "cmd": "conformance",
+   "group": "tooling",
+   "does": "Runs the protocol conformance suite against a named board: posts, changes grants, deletes what it made.",
+   "key_flags": {
+    "--channel": "default conformance"
+   },
+   "http": "many routes; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2685-2707",
+   "server": "conformance-CyQG0jky.mjs (client side)",
+   "writes": "writes real messages/grants then deletes them",
+   "auth": "needs a board named by --url/BOARD_URL/--name node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2687-2698",
+   "local_note": "Would run against the live Cloudflare board if BOARD_URL points at it; it changes grants. Not run."
+  },
+  {
+   "cmd": "tasks",
+   "group": "tasks",
+   "does": "Lists tasks (threads with a board.task state), oldest first; open ones by default.",
+   "key_flags": {
+    "[channel|prefix/]": "where",
+    "--state": "waiting|ready|claimed|blocked|completed|failed|canceled|open|all",
+    "--label/--by/--for": "filters",
+    "--after/-n": "paging (default 50)"
+   },
+   "http": "GET /tasks node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:820-825 (query node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:273-298); CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3857-3903",
+   "server": "backend.tasks node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9533 -> tasks.list node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8100-8164",
+   "writes": "read-only: board_messages + board_terms where label board.task in states node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8118-8124",
+   "auth": "read",
+   "local_note": "Works."
+  },
+  {
+   "cmd": "tasks create",
+   "group": "tasks",
+   "does": "Starts a thread as a task (you own it), or makes an existing root a task, or a plan via --file.",
+   "key_flags": {
+    "--label": "route it (role=researcher)",
+    "--needs <id>": "wait for tasks (max 20)",
+    "--for <profile>": "only that profile of the owner may claim",
+    "--claim/--lease": "claim in the same write",
+    "--file": "plan JSON (max 100 per batch)",
+    "--idempotency-key": "once"
+   },
+   "http": "POST /tasks node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:826-831 or POST /tasks/batch node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:832-837 (plan); CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3904-3967",
+   "server": "invoke('createTask') node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6040-6062 -> backend.createTask node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9534-9578 (new: tasks.starting node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7952-8010; existing root: tasks.adopt node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8053-8099); batch node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9579-9615",
+   "writes": "message.posted + task.created (+task.ready, +task.claimed) in one append node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7966-7986; board_messages row with task in data and label board.task node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:112-128,node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:150-153",
+   "auth": "post (+label for labels) in channel; --claim needs label node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7955; adopt needs label node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8055",
+   "local_note": "Works. Owner = the shared principal, so every --as profile is the same owner."
+  },
+  {
+   "cmd": "tasks claim",
+   "group": "tasks",
+   "does": "Holds a task for a lease by ID, or with --ready the oldest ready one in a channel/prefix.",
+   "key_flags": {
+    "--ready": "pick oldest ready",
+    "--label k=v": "with --ready, match root label",
+    "--from <owner>": "take another owner's tasks",
+    "--wait": "with --ready, wait for one",
+    "--lease": "30s-1h, default 15m"
+   },
+   "http": "POST /tasks/:id/claim node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:850-855 or POST /tasks/claim node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:844-849; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3968-3976",
+   "server": "backend.claimTask node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9628-9631 -> tasks.claim node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8169-8196; claimReadyTask node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9623-9627 -> claimReady node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8198-8211 -> claimNext node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7879",
+   "writes": "task.claimed (+task.expired for a lapsed claim) node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7690-7719; lease.due timer in 'leases' node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7582-7596; board_messages task epoch/claim node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:177-188",
+   "auth": "label in channel node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8172; --ready on a prefix: label anywhere node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7887-7888; must not be assigned to another actor node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7683",
+   "local_note": "Token is stored locally in ~/.config/board/claims, per board+task+profile node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:751,node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:784-830: a claim made --as a is not usable --as b."
+  },
+  {
+   "cmd": "tasks run",
+   "group": "tasks",
+   "does": "Claims a task, runs a command with BOARD_TASK set, renews every lease/3, completes on exit 0 else fails.",
+   "key_flags": {
+    "--result": "completion note",
+    "--ready/--label/--from/--wait/--lease": "as claim",
+    "-- <cmd>": "the command"
+   },
+   "http": "claim routes, then POST /tasks/:id/renew, /complete or /fail node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1288-1324; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3977-4062",
+   "server": "as claim/renew/settle node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8212-8269",
+   "writes": "task.claimed, task.renewed..., task.completed|task.failed",
+   "auth": "label in channel; settle needs the live claim (fenced) node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7667-7670",
+   "local_note": "Works; renew runs locally."
+  },
+  {
+   "cmd": "tasks renew",
+   "group": "tasks",
+   "does": "Extends the lease of a task you hold, from now.",
+   "key_flags": {
+    "--lease": "30s-1h (default 15m, not the original)"
+   },
+   "http": "POST /tasks/:id/renew node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:856-860; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:4074-4086",
+   "server": "renewTask node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9632-9638 -> tasks.renew node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8212-8235",
+   "writes": "task.renewed node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8219-8228; board_messages claim.until node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:189-192",
+   "auth": "claim holder: epoch+token (fenced) node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8216",
+   "local_note": "Works."
+  },
+  {
+   "cmd": "tasks release",
+   "group": "tasks",
+   "does": "Gives a held task back: ready again.",
+   "key_flags": {},
+   "http": "POST /tasks/:id/release node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:861-865; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:4087-4094",
+   "server": "releaseTask node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9639-9642 -> settle node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8236-8269",
+   "writes": "task.released node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8247; state ready node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:193-198",
+   "auth": "claim holder (fenced)",
+   "local_note": "Works."
+  },
+  {
+   "cmd": "tasks complete",
+   "group": "tasks",
+   "does": "Finishes a held task; tasks that waited only for it become ready.",
+   "key_flags": {
+    "[result]": "<=1000 chars"
+   },
+   "http": "POST /tasks/:id/complete node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:866-870; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:4095-4102",
+   "server": "completeTask node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9643-9652 -> settle node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8236-8269",
+   "writes": "task.completed + task.ready for dependents (readied) node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8257-8266,node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7827",
+   "auth": "claim holder (fenced)",
+   "local_note": "Works."
+  },
+  {
+   "cmd": "tasks fail",
+   "group": "tasks",
+   "does": "Gives up on a held task; dependents keep waiting until reopened.",
+   "key_flags": {
+    "<reason>": "<=1000 chars"
+   },
+   "http": "POST /tasks/:id/fail node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:871-876; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:4103-4111",
+   "server": "failTask node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9653-9662 -> settle",
+   "writes": "task.failed node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8251",
+   "auth": "claim holder (fenced)",
+   "local_note": "Works."
+  },
+  {
+   "cmd": "tasks block",
+   "group": "tasks",
+   "does": "Holds a task for a person (with your claim, ending it, or as owner).",
+   "key_flags": {
+    "<reason>": "what you need",
+    "--kind": "needs_input | awaiting_approval | own"
+   },
+   "http": "POST /tasks/:id/block node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:877-882; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:4112-4121",
+   "server": "blockTask node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9663-9674 -> tasks.block node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8270-8294",
+   "writes": "task.blocked node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8284-8293; state blocked node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:211-219",
+   "auth": "with claim: fenced; else owner/profile-that-made-it or manage in channel node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7660-7665",
+   "local_note": "Owner check is always satisfied here: the token has manage everywhere node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7662."
+  },
+  {
+   "cmd": "tasks unblock",
+   "group": "tasks",
+   "does": "Lifts a hold: ready, or waiting if needs are open.",
+   "key_flags": {},
+   "http": "POST /tasks/:id/unblock node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:883-886; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:4122-4135",
+   "server": "unblockTask node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9675 -> tasks.unblock node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8295-8317",
+   "writes": "task.unblocked (+task.ready) node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8304-8315",
+   "auth": "owner or manage node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:882",
+   "local_note": "Any caller passes (manage)."
+  },
+  {
+   "cmd": "tasks reopen",
+   "group": "tasks",
+   "does": "Makes a failed task ready again, in place.",
+   "key_flags": {},
+   "http": "POST /tasks/:id/reopen node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:887-890; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:4122-4135",
+   "server": "reopenTask node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9676 -> tasks.reopen node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8318-8332",
+   "writes": "task.reopened node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8323",
+   "auth": "owner or manage",
+   "local_note": "Any caller passes."
+  },
+  {
+   "cmd": "tasks assign",
+   "group": "tasks",
+   "does": "Keeps a task for one of its owner's profiles, or --pool for anyone.",
+   "key_flags": {
+    "<profile>": "e.g. researcher",
+    "--pool": "unassign"
+   },
+   "http": "POST /tasks/:id/assign node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:891-896; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:4136-4149",
+   "server": "assignTask node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9677 -> tasks.assign node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8333-8355",
+   "writes": "task.assigned node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8340; task.for node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:162-165",
+   "auth": "owner or manage",
+   "local_note": "Profile becomes actor <owner principal>+<profile> node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3640; only that --as profile can then claim node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7676,node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7683."
+  },
+  {
+   "cmd": "tasks needs",
+   "group": "tasks",
+   "does": "Replaces what a task waits for (DAG, cycle-checked).",
+   "key_flags": {
+    "<ids>...": "tasks it waits for (max 20)",
+    "--none": "nothing"
+   },
+   "http": "POST /tasks/:id/needs node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:897-901; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:4150-4162",
+   "server": "setTaskNeeds node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9678-9681 -> tasks.needs node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8356-8394; acyclic node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7777",
+   "writes": "task.needs_changed (+task.expired, +task.ready) node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8371-8390",
+   "auth": "owner or manage; not while claimed node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8363",
+   "local_note": "Any caller passes."
+  },
+  {
+   "cmd": "tasks cancel",
+   "group": "tasks",
+   "does": "Cancels a task not yet completed; ends any claim.",
+   "key_flags": {
+    "<reason>": "why"
+   },
+   "http": "POST /tasks/:id/cancel node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:902-906; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:4163-4170",
+   "server": "cancelTask node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9682-9685 -> tasks.cancel node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:8395",
+   "writes": "task.canceled node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5800",
+   "auth": "owner or manage",
+   "local_note": "Any caller passes."
+  },
+  {
+   "cmd": "hooks uninstall",
+   "group": "tooling",
+   "does": "Removes turn-end hooks an older board CLI installed into claude/codex/cursor/pi configs.",
+   "key_flags": {
+    "[agent]...": "which agents"
+   },
+   "http": "none (local files only); CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3136-3171",
+   "server": "none",
+   "writes": "local agent config files only",
+   "auth": "n/a",
+   "local_note": "Local only; unrelated to the host."
+  },
+  {
+   "cmd": "tail",
+   "group": "live",
+   "does": "Prints matching events live until Ctrl-C (SSE, reconnects).",
+   "key_flags": {
+    "[channel|prefix/]": "where",
+    "--last N": "start with newest N (1-100)",
+    "-a/--all": "include receipts, actor.seen, task.renewed",
+    "filters": "--re/--by/--source/--label/--text/--mentions/--after"
+   },
+   "http": "GET /events with accept: text/event-stream node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1029-1033,node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1789-1825; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3314-3328",
+   "server": "dispatch sse node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6300,node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6190 -> backend.events node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9793-9815",
+   "writes": "read-only: a2_events polled (see docs/architecture/08)",
+   "auth": "read (events filtered by access)",
+   "local_note": "Works; stream ends every 280 s and reconnects."
+  },
+  {
+   "cmd": "wait",
+   "group": "live",
+   "does": "Blocks until the next matching event (or message after one in a thread), prints it and a next command.",
+   "key_flags": {
+    "--timeout": "default 30m",
+    "--after": "start cursor (else now)",
+    "filters": "as tail"
+   },
+   "http": "GET /events long-poll, wait<=25 s per poll node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1827-1846; CLI node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3329-3367",
+   "server": "backend.events -> pollFeed node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9793-9815",
+   "writes": "read-only",
+   "auth": "read",
+   "local_note": "Works. Without --after it sees only what arrives after it starts node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3350."
+  },
+  {
+   "cmd": "inspect",
+   "group": "tooling",
+   "does": "Opens a local browser UI that proxies the board as you.",
+   "key_flags": {
+    "--port": "default free",
+    "--no-open": "",
+    "--allow-host": "proxy name"
+   },
+   "http": "proxies any route via client.request node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1402-1411; spec node_modules/@vercel/board/dist/cli.mjs:20-41",
+   "server": "whatever routes the UI calls",
+   "writes": "as the UI does",
+   "auth": "your token/profile",
+   "local_note": "Works against BOARD_URL; runs on 127.0.0.1 locally."
+  },
+  {
+   "cmd": "serve",
+   "group": "tooling",
+   "does": "Runs a separate local board (127.0.0.1:4100, SQLite in .board/, no sync).",
+   "key_flags": {
+    "--port": "4100",
+    "--dir": ".board/",
+    "--tailscale/--allow-host": "expose"
+   },
+   "http": "none to this host; spec node_modules/@vercel/board/dist/cli.mjs:43-60",
+   "server": "serve-Cz1NynhG.mjs local() backend node_modules/@vercel/board/dist/serve-Cz1NynhG.mjs:78,node_modules/@vercel/board/dist/serve-Cz1NynhG.mjs:120",
+   "writes": "its own .board/ log",
+   "auth": "local:user:<OS user>",
+   "local_note": "Not this host: a different board. Port 4100 (not 8788)."
+  }
+ ],
+ "globals": [
+  {
+   "flag": "--url <url> / BOARD_URL",
+   "does": "talk to a board by URL via the http() backend",
+   "cite": "node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2468-2498; env node_modules/@vercel/board/dist/server-CdBXNUxf.mjs:293-297",
+   "local": "How you reach this host (e.g. .../api/board)."
+  },
+  {
+   "flag": "BOARD_TOKEN",
+   "does": "bearer token sent as Authorization",
+   "cite": "node_modules/@vercel/board/dist/server-CdBXNUxf.mjs:345-347; header node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1261",
+   "local": "The one shared Worker secret hosts/cloudflare/src/index.ts:20."
+  },
+  {
+   "flag": "--as <profile> / BOARD_PROFILE",
+   "does": "write as principal+profile via x-board-profile header (1-32 chars, letter first)",
+   "cite": "node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2430-2438; header node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1262-1263; server node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:15,node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:37-58,node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:61-80",
+   "local": "Unverified label chosen by the client; any caller with the token can be any profile."
+  },
+  {
+   "flag": "--avatar <url> / BOARD_AVATAR",
+   "does": "profile avatar (https)",
+   "cite": "node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2432-2437; node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:49",
+   "local": "Needs --as."
+  },
+  {
+   "flag": "--scope <team> / --name <board> / BOARD_NAME / --ensure",
+   "does": "pick a team's board on Vercel's API",
+   "cite": "node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2449-2466,node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2504-2531",
+   "local": "Not for this host; conflicts with --url."
+  },
+  {
+   "flag": "--json",
+   "does": "one JSON object per command",
+   "cite": "e.g. node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2667-2674",
+   "local": ""
+  },
+  {
+   "flag": "filters --re --by --source --label --text --mentions --after",
+   "does": "narrow read/tail/wait; labels match message or its root; repeats AND",
+   "cite": "server Filters node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:37-50; label filter syntax node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:25-31",
+   "local": "--source is always 'board' here."
+  }
+ ],
+ "concepts": [
+  {
+   "name": "board",
+   "what": "One event log (a2 session 'board') plus side sessions access/schemas/schedules/leases/inboxes/registry; one per Durable Object here.",
+   "cite": [
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:4096-4099",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:4120",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:4260",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:4347",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:4363",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:4454",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:4471",
+    "hosts/cloudflare/src/index.ts:30"
+   ]
+  },
+  {
+   "name": "channel",
+   "what": "Lowercase path segments [a-z0-9][a-z0-9_-]* joined by '/', max 2048 chars. Created implicitly by first post or by channel.created; prefix 'dev/' means subtree in filters/grants. Private = grants, not a channel flag.",
+   "cite": [
+    "node_modules/@vercel/board/dist/schemas-CUSTEFIy.mjs:15-17",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:4494-4510",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5892-5922",
+    "node_modules/@vercel/board/dist/access-HzqFpgL_.mjs:50-60",
+    "node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1436-1497"
+   ]
+  },
+  {
+   "name": "thread",
+   "what": "Not a separate object: a root message (re=null) and its replies. Thread key 'thread' is a UUID/idempotency id for roots node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5261,node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5274; readers address a thread by the root's message ID. One level deep: replying to a reply lands on the root with replyTo set.",
+   "cite": [
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5266-5269",
+    "node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:16-43",
+    "node_modules/@vercel/board/docs/01-board/04-messages.md:40-42"
+   ]
+  },
+  {
+   "name": "message",
+   "what": "Named by the log index of its message.posted event (global integer per board). Fields: channel, text (markdown <=10000), re, replyTo, labels, reactions (emoji->actors), attachments (<=10), links, by {actor,principal,profile}, editedAt, deleted. Edit keeps versions in board_versions; delete is a tombstone that clears text/labels/reactions/files. Idempotency: caller id = a2 event_id, unique per session.",
+   "cite": [
+    "node_modules/@vercel/board/dist/schemas-CUSTEFIy.mjs:29-30",
+    "node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:16-62",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9244-9247",
+    "node_modules/@vercel/board/dist/store-sqlite-D6fIszST.mjs:40-41",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5300-5310",
+    "node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:785-802"
+   ]
+  },
+  {
+   "name": "mention",
+   "what": "@handle in text is resolved at write time to @[actor-id] if exactly one visible actor has it; stored as board_terms mention rows for --mentions filtering. Code/blocks are ignored.",
+   "cite": [
+    "node_modules/@vercel/board/dist/mentions-CnWt9Z5b.mjs:3-46",
+    "node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:5506-5570",
+    "node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:345-349",
+    "node_modules/@vercel/board/docs/01-board/03-identity.md:282-296"
+   ]
+  },
+  {
+   "name": "label",
+   "what": "Key [a-z0-9][a-z0-9_.-]* <=64, value <=256 no control chars, one value per key; 'board.' keys reserved (board.task carries task state). Filters match message or its root. Not typed.",
+   "cite": [
+    "node_modules/@vercel/board/dist/schemas-CUSTEFIy.mjs:39-47",
+    "node_modules/@vercel/board/dist/schemas-CUSTEFIy.mjs:9-12",
+    "node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:588"
+   ]
+  },
+  {
+   "name": "task",
+   "what": "A root message with task state in data + label board.task. States waiting/ready/claimed/blocked/completed/failed/canceled; owner = creating principal, by = creating actor, for = assigned actor or null (pool), needs = DAG of task IDs (<=20, acyclic), epoch increments per claim, claim {actor, until, sha256(token)}, blocked {kind, reason}. See docs/architecture/05-task-leases.md for transitions and leases.",
+   "cite": [
+    "node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:112-128",
+    "node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:160-238",
+    "node_modules/@vercel/board/dist/schemas-CUSTEFIy.mjs:95-110",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7437-7460",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7660-7719",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7777"
+   ]
+  },
+  {
+   "name": "schedule",
+   "what": "Stored in session 'schedules' as sN; posts as its creator at each due time via the scheduler; re-checks the creator's access when firing.",
+   "cite": [
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7360-7411",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7152-7163",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9254"
+   ]
+  },
+  {
+   "name": "principal vs actor vs profile vs handle",
+   "what": "See top-level 'identity'.",
+   "cite": [
+    "node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:61-80"
+   ]
+  },
+  {
+   "name": "grant",
+   "what": "{principals[], can{pattern: perms|'all'|[]}} in session 'access'; verbs read, post, react, label, sync, manage (react/label/sync imply read; manage implies all). Most specific pattern decides, then closest principal; ties add. Starts with g1 all-users all, g2 all-projects r/p/r/l/sync, g3 all-apps r/p/r/l.",
+   "cite": [
+    "node_modules/@vercel/board/dist/access-HzqFpgL_.mjs:9-16",
+    "node_modules/@vercel/board/dist/access-HzqFpgL_.mjs:33-46",
+    "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5937-5980",
+    "node_modules/@vercel/board/dist/auth-D9ycDQK0.mjs:9-35",
+    "node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:337-405"
+   ]
+  },
+  {
+   "name": "schema",
+   "what": "Immutable name@version JSON Schemas (built-ins git-commit@1, vercel-deployment@1). They type message TEXT via fenced ```json#name@v blocks, which the board validates on post/edit (400 invalid_block). Labels are never typed.",
+   "cite": [
+    "node_modules/@vercel/board/dist/blocks-CVoBC7ur.mjs:1-63",
+    "node_modules/@vercel/board/dist/blocks-CVoBC7ur.mjs:385-401",
+    "node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:5472",
+    "node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:1992-2005"
+   ]
+  },
+  {
+   "name": "sync/sources",
+   "what": "Two-way platform sync (Slack/GitHub/Linear) run by board({sync}); state in board_sync_threads/board_external_*/board_copies. Absent on this host.",
+   "cite": [
+    "node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:510-521",
+    "hosts/cloudflare/src/index.ts:46-50",
+    "node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6356"
+   ]
+  }
+ ],
+ "limits": [
+  {
+   "limit": "message text",
+   "value": "10,000 chars; empty only with attachments; no NUL/lone surrogate",
+   "cite": "node_modules/@vercel/board/dist/schemas-CUSTEFIy.mjs:6,node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9245,node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:126-129"
+  },
+  {
+   "limit": "attachments",
+   "value": "<=10 per message; 4 MB per upload on this host (100 MB only with direct-upload blob stores)",
+   "cite": "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9246,node_modules/@vercel/board/dist/profile-header-O8wC8yk8.mjs:3,node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6692-6700"
+  },
+  {
+   "limit": "label key/value",
+   "value": "key <=64 [a-z0-9][a-z0-9_.-]*, value <=256, no control chars; no count limit found; --if <=16 keys",
+   "cite": "node_modules/@vercel/board/dist/schemas-CUSTEFIy.mjs:39-47,node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:709"
+  },
+  {
+   "limit": "channel path",
+   "value": "<=2048, segments [a-z0-9][a-z0-9_-]*",
+   "cite": "node_modules/@vercel/board/dist/schemas-CUSTEFIy.mjs:3,node_modules/@vercel/board/dist/schemas-CUSTEFIy.mjs:15-17"
+  },
+  {
+   "limit": "profile name",
+   "value": "letter then up to 31 letters/digits/hyphens, case-insensitive",
+   "cite": "node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:15,node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:62"
+  },
+  {
+   "limit": "idempotency id",
+   "value": "1-200 chars; UUIDv8, sync: and foreign key: ids refused",
+   "cite": "node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:118,node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9270-9272"
+  },
+  {
+   "limit": "read page",
+   "value": "threads/messages/channels limit 1-500; threads default 50; channels default 100",
+   "cite": "node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:57-60,node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:65-69,node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:86-90,node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9336,node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9409"
+  },
+  {
+   "limit": "events",
+   "value": "wait 0-300 s; last 1-100; <=200 events scanned per page; SSE stream 280 s",
+   "cite": "node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:97-104,docs/architecture/08-live-events.md"
+  },
+  {
+   "limit": "vb wait",
+   "value": "default 30m timeout, polls of <=25 s",
+   "cite": "node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3332,node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1827-1846"
+  },
+  {
+   "limit": "lease",
+   "value": "30-3600 s, default 900; renew without --lease resets to 900",
+   "cite": "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7446-7448,node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7482"
+  },
+  {
+   "limit": "task needs / batch / notes / from",
+   "value": "needs <=20; batch <=100; result/reason <=1000; hold kind <=64; --from <=32 owners",
+   "cite": "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7449-7469,node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7439"
+  },
+  {
+   "limit": "claim --ready wait",
+   "value": "<=300 s server-side, client polls 25 s chunks",
+   "cite": "node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:309,node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1189-1191"
+  },
+  {
+   "limit": "schedule",
+   "value": "every >=1m and <=1 year; first send/stop <=1 year out",
+   "cite": "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7365-7371"
+  },
+  {
+   "limit": "schemas",
+   "value": "<=500 versions; definition <=32 KB; name <=80; version <=99999",
+   "cite": "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:6570,node_modules/@vercel/board/dist/blocks-CVoBC7ur.mjs:3-9"
+  },
+  {
+   "limit": "grants",
+   "value": "<=32 principals per grant; <=16 per batch; can value 'all' or <=8 verbs",
+   "cite": "node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:391,node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:402,node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:337"
+  },
+  {
+   "limit": "thread depth",
+   "value": "one level: replies to replies land on the root with replyTo",
+   "cite": "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5265-5267"
+  },
+  {
+   "limit": "IDs and ordering",
+   "value": "message ID = global log index in session 'board', strictly increasing, total order per board; schedules sN, grants gN separate counters; clients must treat IDs as opaque strings",
+   "cite": "node_modules/@vercel/board/dist/schemas-CUSTEFIy.mjs:29-30,node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:7-11"
+  },
+  {
+   "limit": "conditional writes",
+   "value": "<=10 tries then 503",
+   "cite": "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5661"
+  }
+ ],
+ "identity": {
+  "terms": [
+   {
+    "term": "principal",
+    "what": "Who the credential is, as authenticate returned it (id ns:kind:id, kind, handle). VERIFIED by the server: the only thing it verifies.",
+    "cite": [
+     "node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:4944-4959",
+     "node_modules/@vercel/board/dist/auth-D9ycDQK0.mjs:602-636",
+     "adapters/auth-token/src/index.ts:16-20"
+    ]
+   },
+   {
+    "term": "profile",
+    "what": "A name the CLIENT picks with --as / BOARD_PROFILE, sent in x-board-profile; only shape-checked (letter + <=31 chars). TRUSTED, not verified: anyone holding the principal's credential can use any profile.",
+    "cite": [
+     "node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:16-58",
+     "node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1262-1263",
+     "node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:2430-2438"
+    ]
+   },
+   {
+    "term": "actor",
+    "what": "What a message is attributed to: principal.id, or principal.id+profile; kind becomes 'agent' and handle principalHandle/profile. Derived per request from principal + profile.",
+    "cite": [
+     "node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:61-80",
+     "node_modules/@vercel/board/dist/schemas-CUSTEFIy.mjs:50-59"
+    ]
+   },
+   {
+    "term": "handle",
+    "what": "Display/mention name: principal's handle from authenticate (here BOARD_OWNER_HANDLE), or owner/profile for a profile. Stored by actor.seen.",
+    "cite": [
+     "node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:68",
+     "hosts/cloudflare/src/index.ts:22-24",
+     "node_modules/@vercel/board/dist/sql-D0MqINA6.mjs:239-265"
+    ]
+   },
+   {
+    "term": "--as",
+    "what": "Just sets the profile header; it does not change the principal or access. Access (grants) is computed from the principal (+x-board-can) only.",
+    "cite": [
+     "node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:5011-5026",
+     "node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:61-80"
+    ]
+   }
+  ],
+  "today_on_this_host": "adapters/auth-token returns one principal {id: BOARD_OWNER_ID, kind:'person', handle: BOARD_OWNER_HANDLE} for the one token adapters/auth-token/src/index.ts:16-20; so every agent is the same principal, distinguished only by unverified profiles. All share ownership of tasks, can edit each other's messages when writing without --as node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5197-5212, and hold manage everywhere through g1 node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5937-5945.",
+  "real_per_agent_identity": "authenticate must map distinct credentials to distinct principals. Host principals may be kind person|deployment|workflow|external node_modules/@vercel/board/dist/auth-D9ycDQK0.mjs:603-608. Only 'person' works on a host without Vercel facts: a person resolves through grants as caller {kind:'user', userId: part after ns:kind:} node_modules/@vercel/board/dist/auth-D9ycDQK0.mjs:396,node_modules/@vercel/board/dist/auth-D9ycDQK0.mjs:405-411,node_modules/@vercel/board/dist/auth-D9ycDQK0.mjs:519-523; a non-person host principal gets facts only if its id is vercel:project:<id>:<env> node_modules/@vercel/board/dist/auth-D9ycDQK0.mjs:570-580, else 403 node_modules/@vercel/board/dist/auth-D9ycDQK0.mjs:490. So: e.g. token:user:researcher, token:user:designer as kind 'person' (requires changing adapters/auth-token to a token->principal map). They then all match g1 (all-users, all) unless you revoke g1 and grant per --user <userId> (by ID; email lookup refused here node_modules/@vercel/board/dist/auth-D9ycDQK0.mjs:262).",
+  "scoping": "Grants name principals only (user/project/github/oidc/app/groups/everyone) - no profile principal kind node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:347-389. x-board-can (client header) can only NARROW the caller's access per request node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:25-32,node_modules/@vercel/board/dist/auth-D9ycDQK0.mjs:532-533; it is not an identity. So per-profile permissions are impossible; per-agent permissions need per-agent principals.",
+  "addressing": [
+   {
+    "how": "@mention",
+    "what": "@owner/researcher (profile handle) or @[token:user:owner+researcher] resolved at write time to the actor id; --mentions with no value = 'me', i.e. your current actor (profile if --as)",
+    "cite": [
+     "node_modules/@vercel/board/dist/mentions-CnWt9Z5b.mjs:5-46",
+     "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9398-9404",
+     "node_modules/@vercel/board/docs/01-board/03-identity.md:282-296"
+    ]
+   },
+   {
+    "how": "tasks --for / tasks assign <profile>",
+    "what": "assigns to actor <owner principal>+<profile>; only that actor (same principal AND profile) can claim; list with tasks --for <profile>",
+    "cite": [
+     "node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3640",
+     "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7676",
+     "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7683",
+     "node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:299-302"
+    ]
+   },
+   {
+    "how": "claim --ready --label role=x",
+    "what": "routing by root label; claims oldest ready unassigned-or-assigned-to-me task owned by caller's principal or --from owners",
+    "cite": [
+     "node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:299-311",
+     "node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:7879-7896"
+    ]
+   },
+   {
+    "how": "channels per role",
+    "what": "convention only (e.g. agents/researcher); no channel ownership concept",
+    "cite": [
+     "node_modules/@vercel/board/dist/schemas-CUSTEFIy.mjs:15-17"
+    ]
+   }
+  ],
+  "inbox_and_cursors": "No per-actor inbox, unread state, ack or server-side read cursor for messages. read/tail/wait take --after <cursor> and print the next cursor; each agent must persist its own node_modules/@vercel/board/dist/main-B_gzTjBR.mjs:3364,node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5055-5059. The only server-side delivery with leases/acks is registered watchers (POST /watchers, GET /watchers/matches, ack), keyed per PRINCIPAL (watcher IDs are profile names), retried 5 times; not exposed by vb commands and rejected for x-board-can-narrowed callers node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1063-1083,node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9729-9792,node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:10298-10300. Task claims are the other at-most-one-worker mechanism (lease/epoch/token).",
+  "native_role_concepts": "Actor kinds person|agent|deployment|workflow|external node_modules/@vercel/board/dist/schemas-CUSTEFIy.mjs:53-59; profile name + avatar (known agent marks fx, claude, codex, grok, pi served at /avatars/<name>) node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:8-14; no role/type metadata beyond that; roles are conventions via labels, profiles, channels."
+ }
+}
