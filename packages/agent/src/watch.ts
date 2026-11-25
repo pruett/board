@@ -2,8 +2,9 @@
  * The lead and chief-of-staff loops: wait on the board for the events a program answers, run one
  * fresh agent per event, wait again. Several waits run at once; the first event wins and the others
  * are interrupted. Each wait carries its own cursor across runs, so every event that lands while an
- * agent runs gets its own run next, in order, once. The cursors are saved to
- * `.agent/<profile>/cursors.json` after each event, so a restart goes on from where it stopped.
+ * agent runs gets its own run next, in order, once. The cursors, and the events already run on each
+ * channel, are saved to `.agent/<profile>/cursors.json` after each event, so a restart goes on from
+ * where it stopped and an event two triggers match still runs once.
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -82,7 +83,7 @@ export type Decision = "run" | "own" | "seen" | "ignored"
  * handled already (an event can match two triggers on one channel). Distinct cursors each get a run,
  * even on one thread: a run that started after an event is no proof it answered it.
  */
-export const decide = (trigger: Trigger, event: BoardEvent, profile: string, state: Pick<WatchState, "handled">): Decision =>
+export const decide = (trigger: Trigger, event: BoardEvent, profile: string, state: { readonly handled: ReadonlySet<string> }): Decision =>
   state.handled.has(event.cursor)
     ? "seen"
     : isOwn(event, profile)
@@ -91,51 +92,96 @@ export const decide = (trigger: Trigger, event: BoardEvent, profile: string, sta
     ? "ignored"
     : "run"
 
-/** Cursors per trigger, the events already handled, and the file the cursors are saved to (none: not saved). */
+/** Cursors per trigger, the cursors of the events already run per channel, and the file both are saved to (none: not saved). */
 export interface WatchState {
   readonly cursors: Map<string, string | undefined>
-  readonly handled: Set<string>
+  readonly handled: Map<string, Set<string>>
   readonly file: string | undefined
 }
 
 /** Where a program's cursors are saved. */
 export const cursorFile = (repo: string, profile: string) => join(repo, ".agent", profile, "cursors.json")
 
-/** The saved cursors per trigger name; empty when there is no file or it does not parse. */
-export const readCursors = (file: string): Record<string, string> => {
-  try {
-    const json: unknown = JSON.parse(readFileSync(file, "utf8"))
-    if (typeof json !== "object" || json === null) return {}
-    return Object.fromEntries(Object.entries(json).filter((e): e is [string, string] => typeof e[1] === "string"))
-  } catch {
-    return {}
-  }
+/** What cursors.json holds: each trigger's cursor, and the cursors of the events already run on each channel. */
+export interface Saved {
+  readonly cursors: Record<string, string>
+  readonly handled: Record<string, Array<string>>
 }
 
-/** Saves the cursors (write then rename, so a crash leaves the old file or the new one). */
-export const writeCursors = (file: string, cursors: ReadonlyMap<string, string | undefined>) => {
+const isRecord = (u: unknown): u is Record<string, unknown> => typeof u === "object" && u !== null && !Array.isArray(u)
+const strings = (u: unknown): Record<string, string> =>
+  isRecord(u) ? Object.fromEntries(Object.entries(u).filter((e): e is [string, string] => typeof e[1] === "string")) : {}
+
+/**
+ * Reads cursors.json: `{ cursors, handled }`, or the older flat `{ <trigger>: <cursor> }` (no handled
+ * events). Empty when there is no file or it does not parse, so every trigger starts from now.
+ */
+export const readSaved = (file: string): Saved => {
+  let json: unknown
+  try {
+    json = JSON.parse(readFileSync(file, "utf8"))
+  } catch {
+    return { cursors: {}, handled: {} }
+  }
+  if (!isRecord(json) || !isRecord(json.cursors)) return { cursors: strings(json), handled: {} }
+  const handled = isRecord(json.handled)
+    ? Object.fromEntries(
+      Object.entries(json.handled).map(([channel, list]): [string, Array<string>] => [
+        channel,
+        Array.isArray(list) ? list.filter((c): c is string => typeof c === "string") : [],
+      ]),
+    )
+    : {}
+  return { cursors: strings(json.cursors), handled }
+}
+
+/** The saved cursors per trigger name; empty when there is no file or it does not parse. */
+export const readCursors = (file: string): Record<string, string> => readSaved(file).cursors
+
+/** Saves the cursors and the handled events (write then rename, so a crash leaves the old file or the new one). */
+export const writeCursors = (
+  file: string,
+  cursors: ReadonlyMap<string, string | undefined>,
+  handled: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
+) => {
   mkdirSync(dirname(file), { recursive: true })
-  const json = Object.fromEntries([...cursors].filter((e): e is [string, string] => e[1] !== undefined))
+  const json: Saved = {
+    cursors: Object.fromEntries([...cursors].filter((e): e is [string, string] => e[1] !== undefined)),
+    handled: Object.fromEntries([...handled].map(([channel, set]) => [channel, [...set]])),
+  }
   writeFileSync(`${file}.tmp`, `${JSON.stringify(json, null, 2)}\n`)
   renameSync(`${file}.tmp`, file)
 }
 
-const save = (state: WatchState) => state.file === undefined ? Effect.void : Effect.sync(() => writeCursors(state.file!, state.cursors))
+const save = (state: WatchState) =>
+  state.file === undefined ? Effect.void : Effect.sync(() => writeCursors(state.file!, state.cursors, state.handled))
 
-/** How many handled event cursors to remember. */
-const handledLimit = 1000
+/** How many run event cursors to remember per channel. */
+const handledLimit = 100
+
+/** The cursors of the events already run on `channel`. */
+const handledOn = (state: Pick<WatchState, "handled">, channel: string) => {
+  let set = state.handled.get(channel)
+  if (set === undefined) state.handled.set(channel, set = new Set())
+  return set
+}
 
 /**
  * Starts every trigger at its saved cursor in `file`, or at its channel's cursor now when none is
- * saved, and saves them at once so a restart before the first event still goes on from here.
+ * saved, restores the events already run per channel, and saves at once so a restart before the
+ * first event still goes on from here.
  */
 export const initialState = (triggers: ReadonlyArray<Trigger>, file?: string) =>
   Effect.gen(function*() {
     const board = yield* Board
-    const saved = file === undefined ? {} : readCursors(file)
+    const saved = file === undefined ? { cursors: {}, handled: {} } : readSaved(file)
     const cursors = new Map<string, string | undefined>()
-    for (const trigger of triggers) cursors.set(trigger.name, saved[trigger.name] ?? (yield* board.cursor(trigger.channel)))
-    const state: WatchState = { cursors, handled: new Set<string>(), file }
+    for (const trigger of triggers) cursors.set(trigger.name, saved.cursors[trigger.name] ?? (yield* board.cursor(trigger.channel)))
+    const handled = new Map<string, Set<string>>()
+    for (const channel of new Set(triggers.map((t) => t.channel))) {
+      handled.set(channel, new Set((saved.handled[channel] ?? []).slice(-handledLimit)))
+    }
+    const state: WatchState = { cursors, handled, file }
     yield* save(state)
     return state
   })
@@ -173,14 +219,15 @@ export const step = (config: WatchConfig, state: WatchState) =>
     if (Option.isNone(event)) return
     const e = event.value
     state.cursors.set(trigger.name, e.cursor)
-    const decision = decide(trigger, e, config.profile, state)
+    const handled = handledOn(state, trigger.channel)
+    const decision = decide(trigger, e, config.profile, { handled })
     const what = `${e.type} #${e.messageId} (${trigger.name}, cursor ${e.cursor})`
     // Another trigger on the same channel may answer what this one ignores, so only a run marks an event handled.
     if (decision === "own") yield* log(`skipped own ${what}`)
     if (decision === "ignored") yield* log(`ignored ${what}`)
     if (decision === "run") {
-      state.handled.add(e.cursor)
-      if (state.handled.size > handledLimit) state.handled.delete(state.handled.values().next().value!)
+      handled.add(e.cursor)
+      if (handled.size > handledLimit) handled.delete(handled.values().next().value!)
       yield* log(`woke on ${what}`)
       yield* runEvent(config, e)
     }
