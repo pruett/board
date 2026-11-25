@@ -7,8 +7,8 @@
  * (`{"*": ["read","post","react","label"]}`), never manage or sync, so it can't cancel, block or reopen
  * another agent's task. See adapters/auth-token/README.md.
  */
-import { parseCan } from "@vercel/board/access"
-import { sha256Hex } from "./index.ts"
+import { Result } from "effect"
+import { agentScope, sha256Hex } from "./index.ts"
 
 const [name, canJson] = process.argv.slice(2)
 if (!name || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(name)) {
@@ -17,13 +17,18 @@ if (!name || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(name)) {
   process.exit(2)
 }
 
-let can: Record<string, "all" | string[]> | undefined
+// The same check BOARD_TOKENS gets: patterns and permissions as a structure, then as header text.
+let can: unknown
 if (canJson !== undefined) {
   try {
     can = JSON.parse(canJson)
-    parseCan(Object.entries(can!).map(([p, g]) => `${p}=${g === "all" ? "all" : g.join(",")}`).join(";"), "can")
   } catch (error) {
     console.error(`can must be JSON like {"*": ["read","post"]}: ${error instanceof Error ? error.message : error}`)
+    process.exit(2)
+  }
+  const checked = agentScope(can)
+  if (Result.isFailure(checked)) {
+    console.error(`can must be JSON like {"*": ["read","post"]}: ${checked.failure}`)
     process.exit(2)
   }
 }

@@ -25,6 +25,13 @@ An agent token signs in as `token:agent:<name>`. Revoke one by removing its entr
 
 `can` has a grant's shape: channel pattern → a list of `read`, `post`, `react`, `label`, `sync`, `manage`, or `"all"`.
 It narrows whatever the board's grants give the agent; it never widens them.
+`"all"` is a pattern's whole grant (`{"*": "all"}`), never an item in a list.
+
+`can` is checked as a structure before it becomes `x-board-can` text: each pattern must be `*`, a channel
+(`fleet2`) or a channel and its subtree (`fleet2/`), by Board's own rule, and each permission one of the six
+names exactly. Anything else, `"read,manage"` or `"safe=read;*"` or `" read"`, stops the board at startup
+with an error naming the entry and the bad value, so a separator in a value can't change what it grants.
+`mint.ts` runs the same check.
 
 **Default, when an entry has no `can`:** `{"*": ["read","post","react","label"]}`. That is enough to claim,
 renew, block, unblock, complete and fail the agent's own tasks, and to post and reply. It leaves out

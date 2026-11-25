@@ -1,5 +1,5 @@
 import { HttpError } from "@vercel/board"
-import { parseCan } from "@vercel/board/access"
+import { compileAccess, parseCan, PERMISSIONS } from "@vercel/board/access"
 import { Config, ConfigProvider, Context, Effect, Option, Redacted, Result, Schema, Tracer } from "effect"
 
 /** Who holds a token: the person, from `BOARD_OWNER_*`, or one agent, from `BOARD_TOKENS`. */
@@ -44,14 +44,57 @@ const OwnerHandle = Schema.String.check(
   Schema.isPattern(/^\S{1,64}$/, { message: "owner handle must be 1-64 characters, no spaces" }),
 )
 
-// A grant's `can`: channel pattern -> permissions, or "all". Board's parseCan checks the patterns and names.
+/**
+ * Why a `can` isn't a grant's can, naming the bad pattern or permission, or true. It runs on the structure, before
+ * `canText` joins it with `,` `;` `=`: checked only as header text, `{"*": ["read,manage"]}` would become manage.
+ * A pattern is what Board's own `compileAccess` takes (`*`, a channel, or a channel and its subtree), a permission
+ * one of Board's `PERMISSIONS`, and `"all"` only as a pattern's whole grant, as Board's grants take it.
+ */
+function canProblem(can: Readonly<Record<string, "all" | ReadonlyArray<string>>>): string | true {
+  for (const [pattern, grant] of Object.entries(can)) {
+    try {
+      compileAccess({ [pattern]: [] })
+    } catch {
+      return `channel pattern ${JSON.stringify(pattern)} must be *, a channel (fleet2), or a channel and its subtree (fleet2/)`
+    }
+    if (grant === "all") continue
+    for (const permission of grant) {
+      if (!(PERMISSIONS as ReadonlyArray<string>).includes(permission)) {
+        return `permission ${JSON.stringify(permission)} at ${JSON.stringify(pattern)} must be one of ${PERMISSIONS.join(", ")}`
+      }
+    }
+  }
+  return true
+}
+
+// A grant's `can`: channel pattern -> a list of Board's permissions, or "all". parseCan still checks the header text after.
 const AgentCan = Schema.Record(Schema.String, Schema.Union([Schema.Literal("all"), Schema.Array(Schema.String)]))
+  .check(Schema.makeFilter(canProblem))
 
 const AgentEntry = Schema.Struct({ id: OwnerId, handle: OwnerHandle, can: Schema.optional(AgentCan) })
 
-/** A `can` object as `x-board-can` text: `{"dev/": ["read"], "*": "all"}` is `dev/=read;*=all`. */
+/** A checked `can` object as `x-board-can` text: `{"dev/": ["read"], "*": "all"}` is `dev/=read;*=all`. */
 function canText(can: Readonly<Record<string, "all" | ReadonlyArray<string>>>): string {
   return Object.entries(can).map(([pattern, grant]) => `${pattern}=${grant === "all" ? "all" : grant.join(",")}`).join(";")
+}
+
+/** A schema failure on one line: `permission "read,manage" at "*" must be … at ["can"]`. */
+const oneLine = (error: Schema.SchemaError) => error.message.replace(/\n\s*/g, " ")
+
+/**
+ * A `can` as `x-board-can` text, or why not: checked as a structure (`AgentCan`), then as header text by Board's
+ * `parseCan`. `name` is what messages call it. mint.ts and `BOARD_TOKENS` both go through here.
+ */
+export function agentScope(can: unknown, name = "can"): Result.Result<string, string> {
+  const checked = Schema.decodeUnknownResult(AgentCan)(can)
+  if (Result.isFailure(checked)) return Result.fail(`${name}: ${oneLine(checked.failure)}`)
+  const scope = canText(checked.success)
+  try {
+    parseCan(scope, name)
+  } catch (error) {
+    return Result.fail(error instanceof Error ? error.message : `${name} is not a valid grant`)
+  }
+  return Result.succeed(scope)
 }
 
 /** The user Board's grants see in a principal id: everything after the second colon (Board's `userIdOf`). */
@@ -85,20 +128,19 @@ function parseAgentTokens(json: string, person: TokenOwner): Result.Result<Reado
   for (const [i, [hash, value]] of Object.entries(raw).entries()) {
     const at = `BOARD_TOKENS entry ${i + 1}`
     if (!HASH.test(hash)) return Result.fail(`${at}: key must be a token's sha256 as 64 lowercase hex characters (make one with mint.ts)`)
-    const entry = Schema.decodeUnknownOption(AgentEntry)(value)
-    if (Option.isNone(entry)) return Result.fail(`${at}: value must be {"id": "token:agent:<name>", "handle": "<name>"} with an optional "can": {"<channel pattern>": ["read", ...]}`)
-    const { id, handle, can } = entry.value
+    const entry = Schema.decodeUnknownResult(AgentEntry)(value)
+    if (Result.isFailure(entry)) {
+      return Result.fail(`${at}: ${oneLine(entry.failure)}; value must be {"id": "token:agent:<name>", "handle": "<name>"} with an optional "can": {"<channel pattern>": ["read", ...]}`)
+    }
+    const { id, handle, can } = entry.success
     if (ids.has(id)) return Result.fail(`${at}: id is already taken by BOARD_OWNER_ID or another entry`)
     if (users.has(userPart(id))) {
       return Result.fail(`${at}: id ends in the same user as BOARD_OWNER_ID or another entry (the part after the second colon); Board's grants would treat them as one user`)
     }
     if (handles.has(handle)) return Result.fail(`${at}: handle is already taken by BOARD_OWNER_HANDLE or another entry`)
-    const scope = canText(can ?? DEFAULT_AGENT_CAN)
-    try {
-      parseCan(scope, `${at} can`)
-    } catch (error) {
-      return Result.fail(error instanceof Error ? error.message : `${at}: can is not a valid grant`)
-    }
+    const checked = agentScope(can ?? DEFAULT_AGENT_CAN, `${at} can`)
+    if (Result.isFailure(checked)) return Result.fail(checked.failure)
+    const scope = checked.success
     ids.add(id)
     users.add(userPart(id))
     handles.add(handle)

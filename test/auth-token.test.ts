@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import { ConfigProvider, Effect, Redacted } from "effect"
+import { ConfigProvider, Effect, Redacted, Result } from "effect"
 import { board, HttpError } from "@vercel/board"
 import { a2, a2SqliteStore, memoryBlob, sqlTables } from "@board/internals"
 import { nodeSqlDriver } from "@board/sql-node"
 import { boardDb, registerDriver } from "@board/sql"
-import { DEFAULT_AGENT_CAN, makeTokenAuth, sha256Hex, TokenAuthConfig, type TokenRequest } from "@board/auth-token"
+import { agentScope, DEFAULT_AGENT_CAN, makeTokenAuth, sha256Hex, TokenAuthConfig, type TokenRequest } from "@board/auth-token"
 
 const TOKEN = "t".repeat(32)
 const valid = { BOARD_TOKEN: TOKEN, BOARD_OWNER_ID: "token:user:kevin", BOARD_OWNER_HANDLE: "kevin" }
@@ -190,6 +190,60 @@ describe("agent scope", () => {
       const message = await configError(await env(await entry(A, { ...agentA, can })))
       expect(message).toContain("BOARD_TOKENS entry 1")
     }
+  })
+
+  // Review #498 finding 1: checked only after canText joined it, a value with `,` `;` `=` widened the scope.
+  test("review #498: a can whose values hold separators is refused at config time, naming the entry and the value", async () => {
+    const cases: Array<[object, string]> = [
+      [{ "*": ["read,manage"] }, `permission "read,manage" at "*"`],
+      [{ "*": ["all"] }, `permission "all" at "*"`],
+      [{ "*": ["read;other=manage"] }, `permission "read;other=manage" at "*"`],
+      [{ "safe=read;*": ["manage"] }, `channel pattern "safe=read;*"`],
+    ]
+    for (const [can, bad] of cases) {
+      const message = await configError(await env(await entry(A, { ...agentA, can })))
+      expect(message).toContain("BOARD_TOKENS entry 1")
+      expect(message).toContain(bad)
+    }
+  })
+
+  test("a bad permission or a bad pattern is refused, naming it", async () => {
+    for (const [can, bad] of [
+      [{ "*": ["read", "admin"] }, `permission "admin"`],
+      [{ "*": ["Read"] }, `permission "Read"`],
+      [{ "*": [""] }, `permission ""`],
+      [{ "dev/*": ["read"] }, `channel pattern "dev/*"`],
+      [{ "Dev": ["read"] }, `channel pattern "Dev"`],
+      [{ "": ["read"] }, `channel pattern ""`],
+      [{ "a,b": ["read"] }, `channel pattern "a,b"`],
+    ] as Array<[object, string]>) {
+      const message = await configError(await env(await entry(A, { ...agentA, can })))
+      expect(message).toContain("BOARD_TOKENS entry 1")
+      expect(message).toContain(bad)
+    }
+  })
+
+  test("whitespace in a pattern or a permission is refused, though parseCan would trim it", async () => {
+    for (const [can, bad] of [
+      [{ " *": ["read"] }, `channel pattern " *"`],
+      [{ "dev ": ["read"] }, `channel pattern "dev "`],
+      [{ "*": [" read"] }, `permission " read"`],
+      [{ "*": ["read "] }, `permission "read "`],
+      [{ "*": " all" }, `["can"]["*"]`],
+    ] as Array<[object, string]>) {
+      const message = await configError(await env(await entry(A, { ...agentA, can })))
+      expect(message).toContain("BOARD_TOKENS entry 1")
+      expect(message).toContain(bad)
+    }
+  })
+
+  test("the valid shapes are accepted: *, a channel, a subtree, every permission, an empty list, \"all\"", () => {
+    const ok = (can: unknown) => Result.getOrThrow(agentScope(can))
+    expect(ok({ "*": ["read", "post", "react", "label", "sync", "manage"] })).toBe("*=read,post,react,label,sync,manage")
+    expect(ok({ "fleet2": ["read"], "fleet2/": ["post"], "a/b-c_1/": [] })).toBe("fleet2=read;fleet2/=post;a/b-c_1/=")
+    expect(ok({ "*": "all", "security/": [] })).toBe("*=all;security/=")
+    expect(ok(DEFAULT_AGENT_CAN)).toBe("*=read,post,react,label")
+    for (const bad of [{}, [], ["read"], "all", null, { "*": "everything" }, { "*": [1] }]) expect(Result.isFailure(agentScope(bad))).toBe(true)
   })
 
   test("an id whose user part is the person's is refused, naming the entry", async () => {
