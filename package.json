@@ -10,7 +10,8 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc -b",
-    "vb": "bun --no-env-file scripts/vb.ts"
+    "vb": "bun --no-env-file scripts/vb.ts",
+    "agent": "bun --no-env-file scripts/agent.ts"
   },
   "devDependencies": {
     "@board/internals": "workspace:*",
@@ -26,7 +27,8 @@
     "@board/auth-token": "workspace:*",
     "@board/host-cloudflare": "workspace:*",
     "@board/blob-r2": "workspace:*",
-    "@board/scheduler-alarm": "workspace:*"
+    "@board/scheduler-alarm": "workspace:*",
+    "@board/agent": "workspace:*"
   },
   "dependencies": {
     "@vercel/board": "0.54.0",

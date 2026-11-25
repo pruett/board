@@ -9,6 +9,7 @@
         "effect": "4.1.5",
       },
       "devDependencies": {
+        "@board/agent": "workspace:*",
         "@board/auth-token": "workspace:*",
         "@board/blob-r2": "workspace:*",
         "@board/host-cloudflare": "workspace:*",
@@ -71,6 +72,12 @@
         "effect": "4.1.5",
       },
     },
+    "packages/agent": {
+      "name": "@board/agent",
+      "dependencies": {
+        "effect": "4.1.5",
+      },
+    },
     "packages/board-internals": {
       "name": "@board/internals",
       "dependencies": {
@@ -91,6 +98,8 @@
     "@vercel/board@0.54.0": "patches/@vercel%2Fboard@0.54.0.patch",
   },
   "packages": {
+    "@board/agent": ["@board/agent@workspace:packages/agent"],
+
     "@board/auth-token": ["@board/auth-token@workspace:adapters/auth-token"],
 
     "@board/blob-r2": ["@board/blob-r2@workspace:adapters/blob-r2"],
