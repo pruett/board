@@ -28,8 +28,20 @@ export class Launcher extends Context.Service<Launcher, {
   static readonly layer = Layer.succeed(Launcher, Launcher.of({ start: (argv, options) => start(argv, options) }))
 }
 
-/** How long a child gets after SIGTERM before SIGKILL. */
+/** How long a child's process group gets after SIGTERM before SIGKILL. */
 const killGraceMs = 10_000
+/** How long output is still read after the child exits: a descendant may hold its pipes open. */
+const drainMs = 2_000
+
+/** Signals every process in the group the child leads; false when none is left. */
+const signalGroup = (pid: number, signal: NodeJS.Signals | 0) => {
+  try {
+    process.kill(-pid, signal)
+    return true
+  } catch {
+    return false
+  }
+}
 
 const start = (argv: ReadonlyArray<string>, { cwd, prefix, logFile }: StartOptions) =>
   Effect.acquireRelease(
@@ -37,33 +49,46 @@ const start = (argv: ReadonlyArray<string>, { cwd, prefix, logFile }: StartOptio
       try: () => {
         mkdirSync(dirname(logFile), { recursive: true })
         const log = Bun.file(logFile).writer()
-        const proc = Bun.spawn([...argv], { cwd, stdin: "ignore", stdout: "pipe", stderr: "pipe" })
-        const tee = async (stream: ReadableStream<Uint8Array>) => {
+        // Its own process group, so stopping it reaches every process it started.
+        const proc = Bun.spawn([...argv], { cwd, stdin: "ignore", stdout: "pipe", stderr: "pipe", detached: true })
+        const tee = async (stream: ReadableStream<Uint8Array>, stop: Promise<unknown>) => {
+          const reader = stream.getReader()
+          void stop.then(() => reader.cancel().catch(() => undefined))
           const decoder = new TextDecoder()
           let rest = ""
-          for await (const bytes of stream) {
-            log.write(bytes)
-            const chunk = decoder.decode(bytes, { stream: true })
-            const lines = (rest + chunk).split("\n")
-            rest = lines.pop() ?? ""
-            for (const line of lines) process.stdout.write(`${prefix} ${line}\n`)
+          try {
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+              log.write(value)
+              const lines = (rest + decoder.decode(value, { stream: true })).split("\n")
+              rest = lines.pop() ?? ""
+              for (const line of lines) process.stdout.write(`${prefix} ${line}\n`)
+            }
+          } catch {
+            // Canceled: the drain after exit is over.
           }
           if (rest !== "") process.stdout.write(`${prefix} ${rest}\n`)
         }
-        const done = Promise.all([proc.exited, tee(proc.stdout), tee(proc.stderr)]).then(async ([code]) => {
-          await log.end()
-          return code
-        })
+        // `done` follows the exit, never the pipes: once the child exits, its output is read for at most drainMs.
+        const drained = proc.exited.then(() => Bun.sleep(drainMs))
+        const done = Promise.all([proc.exited, Promise.race([Promise.all([tee(proc.stdout, drained), tee(proc.stderr, drained)]), drained])])
+          .then(async ([code]) => {
+            await log.end()
+            return code
+          })
         return { proc, done }
       },
       catch: (cause) => new LaunchError({ argv0: argv[0] ?? "", message: String(cause) }),
     }),
     ({ proc, done }) =>
       Effect.promise(async () => {
-        if (proc.exitCode !== null || proc.signalCode !== null) return
-        proc.kill("SIGTERM")
-        const timer = setTimeout(() => proc.kill("SIGKILL"), killGraceMs)
+        // SIGTERM the whole group (the child may have exited and left descendants), SIGKILL whatever is left after the grace.
+        if (signalGroup(proc.pid, "SIGTERM")) {
+          const deadline = Date.now() + killGraceMs
+          while (Date.now() < deadline && signalGroup(proc.pid, 0)) await Bun.sleep(100)
+          signalGroup(proc.pid, "SIGKILL")
+        }
         await done.catch(() => undefined)
-        clearTimeout(timer)
       }),
   ).pipe(Effect.map(({ proc, done }): Child => ({ pid: proc.pid, exited: Effect.promise(() => done) })))

@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test"
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { Console, Effect, Layer, Option } from "effect"
 import { TestClock } from "effect/testing"
 import {
   Board,
   type BoardEvent,
   type Child,
+  cursorFile,
   decide,
   initialState,
   k2Program,
@@ -14,8 +18,10 @@ import {
   leadProgram,
   leadPrompt,
   leadTriggers,
+  readCursors,
   step,
   type WatchConfig,
+  writeCursors,
 } from "@board/agent"
 
 const ev = (cursor: string, type: string, actor: string, messageId: string, re: string | null = null, at = 0): BoardEvent => ({
@@ -72,19 +78,18 @@ describe("trigger selection", () => {
 
 describe("self-filtering", () => {
   test("a program's own writes never start a run; a worker's block of the lead's task does", () => {
-    const none = { handled: new Set<string>(), runs: new Map<string, number>() }
+    const none = { handled: new Set<string>() }
     expect(decide(project!, ev("1", "task.completed", "lead-fleet2", "8"), "lead-fleet2", none)).toBe("own")
     expect(decide(project!, ev("2", "task.blocked", "implementer-mac", "8"), "lead-fleet2", none)).toBe("run")
     expect(decide(project!, ev("3", "task.blocked", "lead-fleet22", "8"), "lead-fleet2", none)).toBe("run")
     expect(decide(ask!, ev("4", "message.posted", "k2", "31", "30"), "k2", none)).toBe("own")
     expect(decide(ask!, ev("4", "task.blocked", "lead-fleet2", "30"), "k2", { ...none, handled: new Set(["4"]) })).toBe("seen")
   })
-  test("an event a later run on its thread already saw is covered; one after the run started is not", () => {
-    const state = { handled: new Set<string>(), runs: new Map([["30", 1_000]]) }
-    expect(decide(ask!, ev("5", "task.blocked", "lead-fleet2", "30", null, 900), "k2", state)).toBe("covered")
-    expect(decide(ask!, ev("6", "message.posted", "lead-fleet2", "31", "30", 900), "k2", state)).toBe("covered")
-    expect(decide(ask!, ev("7", "message.posted", "lead-fleet2", "32", "30", 1_100), "k2", state)).toBe("run")
-    expect(decide(ask!, ev("8", "task.blocked", "lead-fleet2", "40", null, 900), "k2", state)).toBe("run")
+  test("distinct cursors on one thread each run, even after a run on that thread started", () => {
+    const state = { handled: new Set(["5"]) }
+    expect(decide(ask!, ev("5", "task.blocked", "lead-fleet2", "30", null, 900), "k2", state)).toBe("seen")
+    expect(decide(ask!, ev("6", "task.blocked", "lead-fleet2", "30", null, 900), "k2", state)).toBe("run")
+    expect(decide(ask!, ev("7", "message.posted", "lead-fleet2", "32", "30", 900), "k2", state)).toBe("run")
   })
 })
 
@@ -158,6 +163,40 @@ const PROJECT = "fleet2 --label board.task=completed|blocked|failed"
 const GOAL = "hq --label goal=fleet2"
 
 describe("lead loop", () => {
+  test("cursors.json round-trip: saved at start and after each event, and a restart resumes from it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agent-cursors-"))
+    const file = cursorFile(dir, "lead-fleet2")
+    expect(file).toBe(join(dir, ".agent", "lead-fleet2", "cursors.json"))
+    const now = { fleet2: "7", hq: "5" }
+    const { board, waits } = fakeBoard({
+      [PROJECT]: [ev("13", "task.blocked", "implementer-test", "8"), ev("14", "task.completed", "lead-fleet2", "8"), ev("15", "task.blocked", "implementer-test", "9")],
+    }, now)
+    const { launcher, prompts } = fakeLauncher()
+    try {
+      await run(board, launcher, Effect.gen(function*() {
+        const config = yield* leadProgram("fleet2", options)
+        const first = yield* initialState(config.triggers, file)
+        expect(readCursors(file)).toEqual({ fleet2: "7", "hq goal=fleet2": "5" })
+        yield* step(config, first) // 13: a run
+        expect(readCursors(file)).toEqual({ fleet2: "13", "hq goal=fleet2": "5" })
+        yield* step(config, first) // 14: its own, skipped
+        expect(readCursors(file)).toEqual({ fleet2: "14", "hq goal=fleet2": "5" })
+        // Stopped here; 15 lands and the channel moves on before the restart.
+        now.fleet2 = "15"
+        const restarted = yield* initialState(config.triggers, file)
+        expect(restarted.cursors.get("fleet2")).toBe("14")
+        yield* step(config, restarted)
+      }))
+      expect(prompts.map((p) => p.match(/vb read (\d+)\./)?.[1])).toEqual(["8", "9"])
+      expect(waits.at(-2)).toBe(`${PROJECT} after 14`)
+      expect(readCursors(file)).toEqual({ fleet2: "15", "hq goal=fleet2": "5" })
+      writeCursors(file, new Map([["fleet2", "20"], ["hq goal=fleet2", undefined]]))
+      expect(readCursors(file)).toEqual({ fleet2: "20" })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   test("starts each trigger at its channel's cursor, and carries each cursor to the next wait", async () => {
     const { board, waits } = fakeBoard({
       [PROJECT]: [ev("13", "task.blocked", "implementer-test", "8"), ev("15", "task.blocked", "implementer-test", "9")],
@@ -233,8 +272,7 @@ describe("k2 loop", () => {
     expect(lines.some((l) => l.includes("ignored task.created #69 (hq by pruett, cursor 70)"))).toBe(true)
   })
 
-  test("a lead's create then block before k2 runs is one run; a reply during the run is the next", async () => {
-    // TestClock starts at 0 and does not move: the run starts at 0, so events at -1 happened before it.
+  test("one run per event cursor, in order: a create, a block and a reply on one thread are three runs", async () => {
     const { board } = fakeBoard({
       "hq --label ask": [
         ev("60", "task.created", "lead-fleet2", "59", null, -1),
@@ -248,8 +286,8 @@ describe("k2 loop", () => {
       const state = yield* initialState(config.triggers)
       for (let i = 0; i < 3; i++) yield* step(config, state)
     }))
-    expect(prompts.map((p) => p.match(/vb read (\d+)\./)?.[1])).toEqual(["59", "62"])
-    expect(lines.some((l) => l.includes("skipped task.blocked #59 (hq ask, cursor 61): a run on #59 started after it"))).toBe(true)
+    expect(prompts.map((p) => p.match(/vb read (\d+)\./)?.[1])).toEqual(["59", "59", "62"])
+    expect(lines.filter((l) => l.includes("woke on")).map((l) => l.match(/cursor (\d+)/)?.[1])).toEqual(["60", "61", "63"])
   })
 
   test("an event both triggers match runs once", async () => {

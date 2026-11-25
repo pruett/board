@@ -5,17 +5,20 @@ export { coordinatorModel, k2Program, leadProgram, type ProgramOptions } from ".
 export { buildPrompt, k2Prompt, type K2PromptInput, leadPrompt, type LeadPromptInput, type PromptInput } from "./prompt.ts"
 export { type AgentChoice, agentFor, type Executables, isRole, launchArgv, type Role, roles } from "./roles.ts"
 export {
+  cursorFile,
   decide,
   type Decision,
   initialState,
   isOwn,
   k2Triggers,
   leadTriggers,
+  readCursors,
   runEvent,
   step,
   type Trigger,
   watch,
   type WatchConfig,
   type WatchState,
+  writeCursors,
 } from "./watch.ts"
-export { renewEvery, type RoleThreads, round, runTask, say, work, type WorkerConfig } from "./worker.ts"
+export { leaseMargin, renewEvery, renewTimeout, type RoleThreads, round, runTask, say, work, type WorkerConfig } from "./worker.ts"

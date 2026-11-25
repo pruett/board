@@ -3,8 +3,8 @@
  * on it, keep the lease alive while it runs, settle the task if the agent did not, wait again.
  */
 import { join } from "node:path"
-import { Console, DateTime, Duration, Effect, Option } from "effect"
-import { Board, type Task } from "./Board.ts"
+import { Clock, Console, DateTime, Duration, Effect, Option } from "effect"
+import { Board, BoardError, type Task } from "./Board.ts"
 import { projectChannels } from "./channels.ts"
 import { Launcher } from "./Launcher.ts"
 import { buildPrompt } from "./prompt.ts"
@@ -29,12 +29,24 @@ export interface RoleThreads {
 }
 
 export const renewEvery = Duration.minutes(5)
+/** How long one renew may take before it counts as failed. */
+export const renewTimeout = Duration.seconds(30)
+/**
+ * How long after the last successful renew the agent may keep running when renews fail: a minute
+ * short of the 15-minute lease, so it stops before the board can hand the task to someone else.
+ */
+export const leaseMargin = Duration.minutes(14)
 
 /** One line per event on stdout: time, profile, what happened. */
 export const say = (profile: string, message: string) =>
   DateTime.now.pipe(Effect.flatMap((now) => Console.log(`${DateTime.formatIso(now)} ${profile} ${message}`)))
 
-type Outcome = { readonly _tag: "Exited"; readonly code: number } | { readonly _tag: "ClaimLost" }
+type Outcome =
+  | { readonly _tag: "Exited"; readonly code: number }
+  | { readonly _tag: "ClaimLost" }
+  | { readonly _tag: "LeaseLost" }
+const claimLost: Outcome = { _tag: "ClaimLost" }
+const leaseLost: Outcome = { _tag: "LeaseLost" }
 
 /** Runs a fresh agent on a task this profile holds, and settles it as failed if the agent exits still holding it. */
 export const runTask = (config: WorkerConfig, threads: RoleThreads, task: Task) =>
@@ -45,18 +57,41 @@ export const runTask = (config: WorkerConfig, threads: RoleThreads, task: Task) 
     const agent = agentFor(config.role, task.labels)
     const prompt = buildPrompt({ profile: config.profile, role: config.role, repo: config.repo, taskId: task.id, ...threads })
 
-    const renew = board.renew(task.id).pipe(
-      Effect.andThen(log(`renewed #${task.id}`)),
-      Effect.as(true),
-      Effect.catch((e) =>
-        e.reason === "claim_lost" ? Effect.succeed(false) : log(`renew #${task.id} failed: ${e.reason} ${e.message}`).pipe(Effect.as(true))
-      ),
-    )
-    const keepalive = Effect.sleep(renewEvery).pipe(
-      Effect.andThen(renew),
-      Effect.repeat({ while: (held) => held }),
-      Effect.as<Outcome>({ _tag: "ClaimLost" }),
-    )
+    /**
+     * Renews every 5 minutes. A failed renew (an error or no answer in 30 s) is tried again at the next
+     * 5 minutes, but no later than 14 minutes after the last success; one that fails at that point
+     * means the lease may lapse before the board hears from us again.
+     */
+    const keepalive = Effect.gen(function*() {
+      let lastSuccess = yield* Clock.currentTimeMillis
+      let next = lastSuccess + Duration.toMillis(renewEvery)
+      while (true) {
+        yield* Effect.sleep(Duration.millis(Math.max(0, next - (yield* Clock.currentTimeMillis))))
+        const result = yield* board.renew(task.id).pipe(
+          Effect.as("renewed" as const),
+          Effect.timeoutOrElse({
+            duration: renewTimeout,
+            orElse: () => Effect.fail(new BoardError({ command: "tasks renew", reason: "timeout", message: `no answer in ${Duration.format(renewTimeout)}` })),
+          }),
+          Effect.catch((e) =>
+            e.reason === "claim_lost"
+              ? Effect.succeed("lost" as const)
+              : log(`renew #${task.id} failed: ${e.reason} ${e.message}`).pipe(Effect.as("failed" as const))
+          ),
+        )
+        const now = yield* Clock.currentTimeMillis
+        if (result === "lost") return claimLost
+        if (result === "renewed") {
+          yield* log(`renewed #${task.id}`)
+          lastSuccess = now
+          next = now + Duration.toMillis(renewEvery)
+          continue
+        }
+        const deadline = lastSuccess + Duration.toMillis(leaseMargin)
+        if (now >= deadline) return leaseLost
+        next = Math.min(now + Duration.toMillis(renewEvery), deadline)
+      }
+    })
 
     const outcome = yield* Effect.scoped(Effect.gen(function*() {
       const child = yield* launcher.start(launchArgv(agent, prompt, config.exe), {
@@ -74,6 +109,13 @@ export const runTask = (config: WorkerConfig, threads: RoleThreads, task: Task) 
     ))
 
     if (outcome._tag === "ClaimLost") return yield* log(`lost the claim on #${task.id}; stopped the agent`)
+    if (outcome._tag === "LeaseLost") {
+      // The agent is stopped (its scope closed). Hand the task back if the board still lets us; settle nothing else.
+      yield* board.release(task.id).pipe(
+        Effect.catch((e) => e.reason === "claim_lost" ? Effect.void : log(`release #${task.id} failed: ${e.reason} ${e.message}`)),
+      )
+      return yield* log(`lease lost on #${task.id}: no renew succeeded for ${Duration.format(leaseMargin)}; stopped the agent`)
+    }
     yield* log(`exited #${task.id} code ${outcome.code}`)
     if (yield* board.holds(task.id)) {
       yield* board.fail(task.id, `agent exited without settling (exit ${outcome.code})`)
