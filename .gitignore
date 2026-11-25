@@ -13,3 +13,6 @@ tsconfig.tsbuildinfo
 .env
 .env.*
 !.env.example
+
+# bun run agent: one log per task run
+.agent/
