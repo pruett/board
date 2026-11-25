@@ -15,7 +15,7 @@
  */
 import { hostname } from "node:os"
 import { join } from "node:path"
-import { Effect, Fiber, Layer } from "effect"
+import { Cause, Effect, Exit, Fiber, Layer } from "effect"
 import { Board, isRole, k2Program, Launcher, leadProgram, roles, watch, work } from "@board/agent"
 import { repoRoot } from "./env.ts"
 
@@ -65,5 +65,5 @@ if (stopping) {
   console.log(`${new Date().toISOString()} ${profile} stopped`)
   process.exit(0)
 }
-console.error(`${profile} stopped:`, exit)
+console.error(`${profile} stopped: ${Exit.isFailure(exit) ? Cause.pretty(exit.cause) : String(exit)}`)
 process.exit(1)
