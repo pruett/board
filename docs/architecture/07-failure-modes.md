@@ -91,16 +91,21 @@ rolls R2 back (`README.md:47-48`).
 
 ## Auth errors
 
-`makeTokenAuth` yields Board's `authenticate` for one shared token
-(`adapters/auth-token/src/index.ts:47-72`):
+`makeTokenAuth` yields Board's `authenticate` for the person's token, `BOARD_TOKEN`, and one token per
+agent from the optional `BOARD_TOKENS` secret, a JSON object of sha256 hex -> `{id, handle}`. Only hashes are
+stored; revoking an agent is removing its entry (`adapters/auth-token/src/index.ts:82-134`). Agents are
+principals of kind `person`, since Board refuses any other host principal that no Vercel deployment backs, so
+grants name them as `--user <name>`; the default `--all-users everything` grant gives each agent `manage`, which
+can block, reopen or cancel anyone's task.
 
 | Case | What happens | Status | Source |
 |---|---|---|---|
-| no `Authorization` header | `authenticate` answers null; Board answers "missing bearer token" | 401 | `adapters/auth-token/src/index.ts:53`, `node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:4958`, `node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1890` |
-| wrong token | `HttpError(401, "unauthorized")`, compared in constant time | 401 | `adapters/auth-token/src/index.ts:54`, `adapters/auth-token/src/index.ts:68-69`, `adapters/auth-token/src/index.ts:74-79` |
-| right token | caller is the one owner person; `x-board-profile` picks which agent name it writes as | — | `adapters/auth-token/src/index.ts:55`, `node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:16-35`, `node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:5011-5026` |
+| no `Authorization` header | `authenticate` answers null; Board answers "missing bearer token" | 401 | `adapters/auth-token/src/index.ts:112`, `node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:4958`, `node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1890` |
+| person's token | compared in constant time; caller is the owner person; `x-board-profile` picks which agent name it writes as | — | `adapters/auth-token/src/index.ts:113`, `adapters/auth-token/src/index.ts:136-141`, `node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:16-35` |
+| an agent's token | looked up by its sha256; caller is that agent's own principal, `token:agent:<name>` | — | `adapters/auth-token/src/index.ts:115-118` |
+| wrong or revoked token | `HttpError(401, "unauthorized")` | 401 | `adapters/auth-token/src/index.ts:116`, `adapters/auth-token/src/index.ts:129-130` |
 | wrong token on `/_ops/` | the Worker answers before the object sees it | 401 | `hosts/cloudflare/src/index.ts:87-92` |
-| missing or short (< 32 chars) token, or bad owner id | the runtime build fails with a ConfigError; every request answers `{"error": "board could not start", "detail": …}` naming the variable, never the token | 500 | `adapters/auth-token/src/index.ts:16-43`, `hosts/cloudflare/src/index.ts:45-57`, `hosts/cloudflare/src/host.ts:69-78` |
+| missing or short (< 32 chars) token, bad owner id, or bad `BOARD_TOKENS` (not JSON, a key that isn't a sha256, a bad or duplicate id or handle) | the runtime build fails with a ConfigError; every request answers `{"error": "board could not start", "detail": …}` naming the variable and, for `BOARD_TOKENS`, the entry's position, never a token | 500 | `adapters/auth-token/src/index.ts:51-98`, `hosts/cloudflare/src/index.ts:45-57`, `hosts/cloudflare/src/host.ts:69-78` |
 | no `BOARD_PUBLIC_URL` with `NODE_ENV=production` | Board refuses to check tokens | 500 `no_board_url` | `node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:5381-5384`, `hosts/cloudflare/src/host.ts:26-27` |
 
 Errors leave Board as JSON `{error: {code, message}}` (`node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1921-1930`).
