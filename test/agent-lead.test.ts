@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { mkdtempSync, rmSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Console, Effect, Layer, Option } from "effect"
@@ -305,5 +305,49 @@ describe("k2 loop", () => {
     expect(prompts.length).toBe(1)
     expect(prompts[0]).toContain("You are k2, chief of staff.")
     expect(waits).toEqual(["hq --label ask after 45", "hq --by pruett after 45", "hq --label ask after 50", "hq --by pruett after 45"])
+  })
+
+  test("an owner reply both triggers match runs once, even across a restart", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agent-k2-restart-"))
+    const file = cursorFile(dir, "k2")
+    // The owner answers a lead's ask in its thread: `--label ask` and `--by pruett` both print it.
+    const reply = byPerson("50", "message.posted", "51", "30")
+    const { board } = fakeBoard({ "hq --label ask": [reply], "hq --by pruett": [reply] }, { hq: "40" })
+    const { launcher, prompts } = fakeLauncher()
+    try {
+      await run(board, launcher, Effect.gen(function*() {
+        const config = yield* k2Program("pruett", options)
+        const first = yield* initialState(config.triggers, file)
+        yield* step(config, first) // one trigger runs it; the other is still at 40
+        expect(Object.values(readCursors(file)).sort()).toEqual(["40", "50"])
+        expect(JSON.parse(readFileSync(file, "utf8")).handled).toEqual({ hq: ["50"] })
+        const restarted = yield* initialState(config.triggers, file)
+        expect(restarted.handled.get("hq")).toEqual(new Set(["50"]))
+        yield* step(config, restarted) // the other trigger gets 50: already run
+      }))
+      expect(prompts.length).toBe(1)
+      expect(readCursors(file)).toEqual({ "hq ask": "50", "hq by pruett": "50" })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("an old-format cursors.json still restores its cursors, with nothing handled", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agent-k2-old-"))
+    const file = cursorFile(dir, "k2")
+    const { board } = fakeBoard({}, { hq: "40" })
+    try {
+      await run(board, fakeLauncher().launcher, Effect.gen(function*() {
+        const config = yield* k2Program("pruett", options)
+        writeCursors(file, new Map()) // makes the directory
+        writeFileSync(file, JSON.stringify({ "hq ask": "45" }))
+        const state = yield* initialState(config.triggers, file)
+        expect(state.cursors.get("hq ask")).toBe("45")
+        expect(state.cursors.get("hq by pruett")).toBe("40")
+        expect(state.handled.get("hq")).toEqual(new Set())
+      }))
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

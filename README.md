@@ -131,11 +131,12 @@ output is also on stdout, prefixed with its profile and message ID, and saved to
 agent started (SIGTERM to its process group, SIGKILL 10 s later), a worker releases the task it
 held, and the program exits 0.
 
-**Restart:** a lead or k2 saves how far it has read on each trigger to
-`.agent/<profile>/cursors.json` after each event it runs or skips, and at start. Started again, it
-goes on from there: events that landed while it was stopped each get their run, oldest first. An
-event whose run was cut off by the stop runs again. With no file it starts from now; delete the file
-to skip what it missed.
+**Restart:** a lead or k2 saves how far it has read on each trigger, and the last 100 events it ran
+on each channel, to `.agent/<profile>/cursors.json` after each event it runs or skips, and at start.
+Started again, it goes on from there: events that landed while it was stopped each get their run,
+oldest first, and an event two triggers match runs once. An event whose run was cut off by the stop
+runs again. With no file (or one it cannot read) it starts from now; delete the file to skip what it
+missed.
 
 **Lease:** a worker renews its claim every 5 minutes. A renew that fails (or gets no answer in 30 s)
 is tried again; if none has succeeded 14 minutes after the last one, the worker stops the agent,
