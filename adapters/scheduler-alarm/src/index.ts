@@ -40,8 +40,12 @@ export class DeliveryError extends Schema.TaggedError<DeliveryError>()("Delivery
 /** A failed task waits 5 s, doubling, up to 10 minutes; it is never dropped. Persisted per row, so not a `Schedule`. */
 const backoff = (attempts: number) => Math.min(5_000 * 2 ** (attempts - 1), 600_000)
 
-/** How long an alarm waits for `handler()` to mount the servers before failing its due tasks. */
+/**
+ * How long an alarm waits for `handler()` to mount the servers. Past it, the due rows are left
+ * untouched (a missing mount is not the task's failure) and the alarm retries `MOUNT_RETRY_MS` later.
+ */
 const MOUNT_TIMEOUT = "30 seconds"
+const MOUNT_RETRY_MS = 5_000
 
 const TABLE = `create table if not exists board_scheduler (
   key text primary key,
@@ -67,7 +71,8 @@ const sqlTry = <A>(f: () => A) => Effect.try({ try: f, catch: (cause) => new Sch
  * before `schedule` returns, so a restart loses nothing; the alarm is set to the earliest
  * `due_at`. Alarms run at least once, so a task can run twice: a2's drains and its
  * appends and clears, keyed by id, are safe to repeat. An alarm that fires before
- * `handler()` mounts the servers waits for the mount (up to 30 s) instead of failing.
+ * `handler()` mounts the servers waits for the mount (up to 30 s); past that it leaves the
+ * rows as they are and re-arms 5 s later, so no task is failed for a missing mount.
  *
  * The SQL driver is a parameter, not a service: it is synchronous and shared with the
  * host's other SQL users. Time comes from `Clock`; every Promise method runs with the
@@ -86,21 +91,29 @@ export const makeAlarmScheduler = Effect.fn("scheduler-alarm.make")(function* (
   const alarmSet = (at: number) =>
     Effect.tryPromise({ try: () => alarm.set(at), catch: (cause) => new AlarmError({ op: "set", cause }) })
 
-  /** Sets the alarm to the earliest due task. `always`: after an alarm ran, its time is spent, so set it even if later. */
-  const armNext = Effect.fn("scheduler-alarm.armNext")(function* (always: boolean) {
-    const [row] = yield* sqlTry(() => sql.all("select min(due_at) as at from board_scheduler", []))
-    const at = row?.at == null ? null : Number(row.at)
-    if (at === null) return
+  const earliestDue = Effect.map(
+    sqlTry(() => sql.all("select min(due_at) as at from board_scheduler", [])),
+    ([row]) => (row?.at == null ? null : Number(row.at)),
+  )
+
+  /**
+   * Sets the alarm to the earliest due task, never before `notBefore` or now. `always`: after an
+   * alarm ran, its time is spent, so set it even if later. The earliest `due_at` is read after the
+   * `alarm.get()` await, so a `schedule()` that lands during it is counted: the earliest wins.
+   */
+  const armNext = Effect.fn("scheduler-alarm.armNext")(function* (always: boolean, notBefore = 0) {
+    if ((yield* earliestDue) === null) return
     const current = always ? null : yield* alarmGet
-    if (current === null || current > at) yield* alarmSet(Math.max(at, yield* Clock.currentTimeMillis))
+    const at = yield* earliestDue
+    if (at === null) return
+    if (current === null || current > at) yield* alarmSet(Math.max(at, notBefore, yield* Clock.currentTimeMillis))
   })
 
   const deliver = Effect.fn("scheduler-alarm.deliver")(function* (
-    servers: ReadonlyArray<DrainableServer> | null,
+    servers: ReadonlyArray<DrainableServer>,
     task: SchedulerTask,
   ) {
     const fail = (message: string) => new DeliveryError({ kind: task.kind, contract: task.contract, message })
-    if (servers === null) return yield* fail(`no servers mounted after ${MOUNT_TIMEOUT}`)
     const server = servers.find((s) => s.contract.name === task.contract)
     if (!server) return yield* fail(`no server for contract ${task.contract}`)
     yield* Effect.tryPromise({
@@ -112,15 +125,20 @@ export const makeAlarmScheduler = Effect.fn("scheduler-alarm.make")(function* (
     })
   })
 
-  const runDue = Effect.fn("scheduler-alarm.runDue")(function* () {
+  /** Runs what is due. Returns the earliest time the next alarm may fire (0: no limit). */
+  const runDue = Effect.fn("scheduler-alarm.runDue")(function* (): Effect.fn.Return<number, SchedulerSqlError> {
     const start = yield* Clock.currentTimeMillis
     const due = yield* sqlTry(() =>
       sql.all("select key, task, attempts from board_scheduler where due_at <= ? order by due_at", [start]))
-    if (due.length === 0) return
+    if (due.length === 0) return 0
     // An alarm can fire while the object is still starting: wait for `handler()` rather than fail every task.
     const servers = yield* Deferred.await(mounted).pipe(
       Effect.timeoutOrElse({ duration: MOUNT_TIMEOUT, orElse: () => Effect.succeed(null) }),
     )
+    if (servers === null) {
+      yield* Effect.logWarning(`[board] no servers mounted after ${MOUNT_TIMEOUT}; ${due.length} due task(s) wait for the next alarm`)
+      return (yield* Clock.currentTimeMillis) + MOUNT_RETRY_MS
+    }
     for (const row of due) {
       const key = String(row.key), task = JSON.parse(String(row.task)) as SchedulerTask
       const result = yield* Effect.result(deliver(servers, task))
@@ -135,6 +153,7 @@ export const makeAlarmScheduler = Effect.fn("scheduler-alarm.make")(function* (
         yield* Effect.logWarning(`[board] scheduled ${task.kind} failed, attempt ${attempts}`, result.failure)
       }
     }
+    return 0
   })
 
   const schedule = Effect.fn("scheduler-alarm.schedule")(function* (task: SchedulerTask) {
@@ -148,8 +167,8 @@ export const makeAlarmScheduler = Effect.fn("scheduler-alarm.make")(function* (
 
   // Catch everything and set the next alarm ourselves: Cloudflare retries a throwing alarm only 6 times.
   const onAlarm = runDue().pipe(
-    Effect.catchCause((cause) => Effect.logError("[board] alarm run failed", cause)),
-    Effect.andThen(armNext(true)),
+    Effect.catchCause((cause) => Effect.as(Effect.logError("[board] alarm run failed", cause), 0)),
+    Effect.flatMap((notBefore) => armNext(true, notBefore)),
     Effect.catchCause((cause) => Effect.logError("[board] could not set the next alarm", cause)),
     Effect.withSpan("scheduler-alarm.onAlarm"),
   )
