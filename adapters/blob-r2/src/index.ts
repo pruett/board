@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Schedule, Schema } from "effect"
+import { Context, Effect, Schedule, Schema } from "effect"
 import type { BlobStore } from "@board/internals"
 
 /** The part of an R2 binding this adapter uses; a test can pass a fake. */
@@ -65,13 +65,3 @@ export const makeR2Blob = Effect.fn("blob-r2.make")(function*(options: R2BlobOpt
     head: (key) => run(head(key)),
   }
 })
-
-
-/**
- * Promise factory kept until hosts/cloudflare switches to {@link makeR2Blob}. It builds the store
- * with an empty context, so calls do not reach the host's logger or tracer.
- * @deprecated use `makeR2Blob` with an `R2` layer.
- */
-export function r2Blob(bucket: Bucket, prefix = "files/"): BlobStore {
-  return Effect.runSync(makeR2Blob({ prefix }).pipe(Effect.provide(Layer.succeed(R2, bucket))))
-}

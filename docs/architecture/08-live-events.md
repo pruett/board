@@ -74,7 +74,7 @@ With `accept: text/event-stream`, dispatch calls `sse`
   (`node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:5353`,
   `node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6198-6203`,
   `node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6220-6221`). Our host does not set it
-  (`hosts/cloudflare/src/index.ts:46-50`).
+  (`hosts/cloudflare/src/host.ts:32`).
 
 The SDK's `events()` opens the stream, remembers each `id`, and when the stream closes, opens it
 again with `after` set to that id, backing off 500 ms to 30 s on errors

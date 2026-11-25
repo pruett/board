@@ -50,15 +50,15 @@ pause of up to `5 × try` ms; after 10 attempts in all (so at most 9 re-looks) i
 
 Every `put`, `get` and `head` is wrapped in an Effect: on failure it retries 3 times on an
 exponential schedule starting at 100 ms, then fails with an `R2Error` that names the operation
-and key (`adapters/blob-r2/src/index.ts:4-5`, `adapters/blob-r2/src/index.ts:10-11`,
-`adapters/blob-r2/src/index.ts:19-25`). Each call also gets a trace span `r2.<op>`
-(`adapters/blob-r2/src/index.ts:23`). Tested by "retries a failing call" and "gives up after 3
+and key (`adapters/blob-r2/src/index.ts:10-18`,
+`adapters/blob-r2/src/index.ts:38-42`). Each call also gets a trace span `blob-r2.<op>`
+(`adapters/blob-r2/src/index.ts:44-60`). Tested by "retries a failing call" and "gives up after 3
 retries with the key in the error" (`test/blob-r2.test.ts:35-46`).
 
 ## 4. Board's background jobs and watchers
 
 A **watcher** is code that runs when a matching event lands. Our host passes no `watch` or
-`sync` option to `board()` (`hosts/cloudflare/src/index.ts:46-50`), so no watcher runs inside
+`sync` option to `board()` (`hosts/cloudflare/src/host.ts:32`), so no watcher runs inside
 the object. The background jobs that do run are a2 **consumers**: building the tables, matching
 events for registered watchers, expiring leases, sending scheduled messages
 (`node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:9129-9133`,
@@ -95,6 +95,6 @@ events for registered watchers, expiring leases, sending scheduled messages
 
 A due job whose delivery throws stays in `board_scheduler`, with `attempts` counted and the
 error saved, and is tried again 5 s later, doubling, capped at 10 minutes. It is never dropped
-(`adapters/scheduler-alarm/src/index.ts:14-15`, `adapters/scheduler-alarm/src/index.ts:69-73`;
+(`adapters/scheduler-alarm/src/index.ts:40-41`, `adapters/scheduler-alarm/src/index.ts:129-136`;
 tested at `test/scheduler-alarm.test.ts:56-68`). This sits under a2's own retries: a2 asks for a
 drain, and if the drain itself throws, the alarm retries it.

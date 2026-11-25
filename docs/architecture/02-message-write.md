@@ -46,7 +46,7 @@ sequenceDiagram
    (`node_modules/@vercel/board/dist/store-sqlite-D6fIszST.mjs:464-507`). In this repo that
    transaction is the object's `transactionSync`, thanks to our patch
    (`node_modules/@vercel/board/dist/store-sqlite-D6fIszST.mjs:344-346`,
-   `packages/sql/src/node-sqlite.ts:42`, `adapters/sql-do/src/index.ts:25`). It inserts one row
+   `packages/sql/src/node-sqlite.ts:42`, `adapters/sql-do/src/index.ts:31`). It inserts one row
    per event into `a2_events` (`node_modules/@vercel/board/dist/store-sqlite-D6fIszST.mjs:241-243`).
 5. `untilApplied` then tries to write the tables itself: for each new event it calls
    `applyNext` (`node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:5595-5607`).
@@ -111,4 +111,4 @@ from the first event and applies each one (`node_modules/@vercel/board/dist/loca
 message is not lost: the next catch-up writes it.
 
 Both the log and the tables share one SQLite connection
-(`packages/sql/src/driver.ts:4-8`, `hosts/cloudflare/src/index.ts:38-41`).
+(`packages/sql/src/driver.ts:4-8`, `hosts/cloudflare/src/host.ts:28-29`).

@@ -1,16 +1,12 @@
 /**
  * The Cloudflare host: wires adapters, nothing else. One Worker, one Durable Object, one Board.
- * The Worker forwards every request to the object; the object runs Board on its own SQLite.
+ * The Worker forwards every request to the object; the object runs Board on its own SQLite,
+ * inside one ManagedRuntime built from `hostLayer`.
  */
 import { DurableObject } from "cloudflare:workers"
-import { board } from "@vercel/board"
-import { a2, a2SqliteStore, sqlTables } from "@board/internals"
-import { boardDb, registerDriver } from "@board/sql"
-import { doSqlDriver } from "@board/sql-do"
-import { tokenAuth } from "@board/auth-token"
-import { r2Blob } from "@board/blob-r2"
-import { alarmScheduler, type AlarmScheduler } from "@board/scheduler-alarm"
-import { handleOps, OPS_PREFIX, opsAuthorized } from "./ops.ts"
+import { ConfigProvider, Effect, Exit, ManagedRuntime } from "effect"
+import { BoardHost, hostLayer, startupError } from "./host.ts"
+import { OPS_PREFIX, opsAuthorized } from "./ops.ts"
 
 export interface Env {
   BOARD: DurableObjectNamespace<BoardObject>
@@ -30,41 +26,70 @@ export interface Env {
 const BOARD_NAME = "board"
 
 export class BoardObject extends DurableObject<Env> {
-  private readonly team: ReturnType<typeof board>
-  private readonly scheduler: AlarmScheduler
+  private readonly runtime: ManagedRuntime.ManagedRuntime<BoardHost, unknown>
+  /** Set once the runtime is built; `down` instead while it cannot serve. */
+  private ready = false
+  private down: Response | undefined
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
-    const driver = doSqlDriver(ctx.storage)
-    const path = `do:${ctx.id.toString()}`
-    registerDriver(path, driver)
-    const store = { log: a2SqliteStore({ path }), tables: sqlTables(boardDb(driver)), close: async () => {} }
-    this.scheduler = alarmScheduler(driver, {
-      get: () => ctx.storage.getAlarm(),
-      set: (at) => ctx.storage.setAlarm(at),
-    })
-    this.team = board({
-      ...(env.BOARD_PUBLIC_URL ? { url: env.BOARD_PUBLIC_URL } : {}),
-      backend: a2({ store, scheduler: this.scheduler, blob: r2Blob(env.FILES) }),
-      authenticate: tokenAuth(env.BOARD_TOKEN, { id: env.BOARD_OWNER_ID, handle: env.BOARD_OWNER_HANDLE }),
+    this.runtime = ManagedRuntime.make(hostLayer({
+      objectId: ctx.id.toString(),
+      storage: ctx.storage,
+      files: env.FILES,
+      env,
+      reset: (reason) => this.reset(reason),
+    }))
+    // No request or alarm runs before the Board exists. A failed build is kept, not thrown:
+    // a throw here would reset the object and fail the same way on the next request.
+    void ctx.blockConcurrencyWhile(async () => {
+      const exit = await this.runtime.runPromiseExit(BoardHost.use(() => Effect.void))
+      if (Exit.isSuccess(exit)) this.ready = true
+      else {
+        const detail = startupError(exit.cause)
+        console.error("[board] could not start:", detail)
+        this.down = Response.json({ error: "board could not start", detail }, { status: 500 })
+      }
     })
   }
 
   override fetch(request: Request): Promise<Response> {
-    if (new URL(request.url).pathname.startsWith(OPS_PREFIX)) return handleOps(request, this.ctx)
-    return this.team.fetch(request)
+    if (!this.ready) return Promise.resolve(this.down?.clone() ?? Response.json({ error: "board is starting" }, { status: 503 }))
+    return this.runtime.runPromise(BoardHost.use((host) => host.fetch(request)))
   }
 
-  /** Scheduled posts, watcher retries and a2's drains: whatever is due. */
   override alarm(): Promise<void> {
-    return this.scheduler.onAlarm()
+    if (!this.ready) return Promise.resolve()
+    return this.runtime.runPromise(BoardHost.use((host) => host.alarm))
   }
+
+  /**
+   * After `/_ops/restore`: dispose the runtime, so its finalizers run (the `do:<id>` SQL
+   * driver is unregistered from the isolate-wide stand-in), then reset the object.
+   */
+  private reset(reason: string): void {
+    this.ready = false
+    this.down = Response.json({ error: "board is restarting" }, { status: 503 })
+    void this.runtime.dispose().finally(() => this.ctx.abort(reason))
+  }
+}
+
+/** One small runtime per Worker env, for the `/_ops/` token check: config from the env, nothing else. */
+const workerRuntimes = new WeakMap<Env, ManagedRuntime.ManagedRuntime<never, never>>()
+const workerRuntime = (env: Env) => {
+  let runtime = workerRuntimes.get(env)
+  if (!runtime) workerRuntimes.set(env, runtime = ManagedRuntime.make(ConfigProvider.layer(ConfigProvider.fromUnknown(env))))
+  return runtime
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    if (new URL(request.url).pathname.startsWith(OPS_PREFIX) && !opsAuthorized(request, env.BOARD_TOKEN))
-      return Response.json({ error: "unauthorized" }, { status: 401 })
+    if (new URL(request.url).pathname.startsWith(OPS_PREFIX)) {
+      const authorized = await workerRuntime(env).runPromiseExit(opsAuthorized(request))
+      if (Exit.isFailure(authorized))
+        return Response.json({ error: "board could not start", detail: startupError(authorized.cause) }, { status: 500 })
+      if (!authorized.value) return Response.json({ error: "unauthorized" }, { status: 401 })
+    }
     return env.BOARD.get(env.BOARD.idFromName(BOARD_NAME)).fetch(request)
   },
 } satisfies ExportedHandler<Env>

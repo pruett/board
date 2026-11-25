@@ -164,11 +164,3 @@ export const makeAlarmScheduler = Effect.fn("scheduler-alarm.make")(function* (
     onAlarm: () => run(onAlarm),
   }
 })
-
-/**
- * The Promise factory the Cloudflare host calls today; it switches to `makeAlarmScheduler`
- * later. Runs on Effect's default services (live clock, default logger).
- * @deprecated Use `makeAlarmScheduler`, provided with `Alarm`.
- */
-export const alarmScheduler = (sql: SqlDriver, alarm: Alarm["Service"]): AlarmScheduler =>
-  Effect.runSync(makeAlarmScheduler(sql).pipe(Effect.provideService(Alarm, alarm)))

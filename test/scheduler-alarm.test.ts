@@ -8,7 +8,7 @@ import { board } from "@vercel/board"
 import { a2, a2SqliteStore, memoryBlob, sqlTables, type DrainableServer } from "@board/internals"
 import { boardDb, registerDriver, type SqlDriver } from "@board/sql"
 import { nodeSqlDriver } from "@board/sql-node"
-import { Alarm, alarmScheduler, makeAlarmScheduler } from "@board/scheduler-alarm"
+import { Alarm, makeAlarmScheduler } from "@board/scheduler-alarm"
 
 const cleanups: Array<() => void> = []
 afterEach(() => { while (cleanups.length) cleanups.pop()!() })
@@ -149,16 +149,5 @@ describe("makeAlarmScheduler", () => {
       [JSON.stringify({ version: 1, kind: "drain", contract: "c", sessionId: "s", dueAt: 1 })])
     scheduler.handler()
     await expect(scheduler.onAlarm()).resolves.toBeUndefined()
-  })
-})
-
-describe("alarmScheduler (Promise factory the host uses today)", () => {
-  test("still schedules and arms", async () => {
-    const driver = nodeSqlDriver(":memory:")
-    const alarm = fakeAlarm()
-    const scheduler = alarmScheduler(driver, alarm.alarm)
-    const dueAt = Date.now() + 60_000
-    await scheduler.schedule({ version: 1, kind: "drain", contract: "c", sessionId: "s", dueAt })
-    expect(alarm.at()).toBe(dueAt)
   })
 })

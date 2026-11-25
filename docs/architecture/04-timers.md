@@ -55,29 +55,30 @@ Board uses `append` timers for:
 Board gives the scheduler every a2 server it runs (messages, inbox, schedules, registry, tasks,
 watchers) so a due job can find the right one
 (`node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:10427-10440`). Our adapter keeps that list
-(`adapters/scheduler-alarm/src/index.ts:86-89`).
+(`adapters/scheduler-alarm/src/index.ts:158-161`).
 
 ## What our adapter does
 
 `adapters/scheduler-alarm/src/index.ts`:
 
 - `schedule` inserts one row and returns only after it is written, so a restart loses nothing
-  (`adapters/scheduler-alarm/src/index.ts:79-85`, rationale `adapters/scheduler-alarm/src/index.ts:34-39`). The same job scheduled twice is one row: drains are keyed by
-  session and time, appends and clears by their id (`adapters/scheduler-alarm/src/index.ts:25-27`, `adapters/scheduler-alarm/src/index.ts:81`).
-- `armNext` sets the alarm to the earliest `due_at`, but never into the past (`adapters/scheduler-alarm/src/index.ts:44-51`).
-- The object's `alarm()` calls `onAlarm` (`hosts/cloudflare/src/index.ts:58-61`).
-- `onAlarm` runs every row whose time has come, oldest first (`adapters/scheduler-alarm/src/index.ts:62-65`). Each is delivered to
+  (`adapters/scheduler-alarm/src/index.ts:140-147`, rationale `adapters/scheduler-alarm/src/index.ts:65-75`). The same job scheduled twice is one row: drains are keyed by
+  session and time, appends and clears by their id (`adapters/scheduler-alarm/src/index.ts:55-56`, `adapters/scheduler-alarm/src/index.ts:143`).
+- `armNext` sets the alarm to the earliest `due_at`, but never into the past (`adapters/scheduler-alarm/src/index.ts:89-96`).
+- The object's `alarm()` runs `onAlarm` on the object's runtime (`hosts/cloudflare/src/index.ts:61-64`, `hosts/cloudflare/src/host.ts:42`).
+- `onAlarm` runs every row whose time has come, oldest first (`adapters/scheduler-alarm/src/index.ts:115-118`). An alarm that fires
+  before `handler()` mounts the servers waits up to 30 s for them (`adapters/scheduler-alarm/src/index.ts:120-123`). Each is delivered to
   its a2 server: a drain calls `server.drain(sessionId)`, an append or clear calls Board's own
-  delivery functions (`adapters/scheduler-alarm/src/index.ts:53-60`; those are
+  delivery functions (`adapters/scheduler-alarm/src/index.ts:98-113`; those are
   `node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:1560-1567` and
   `node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:1575-1581`).
-- Success deletes the row (`adapters/scheduler-alarm/src/index.ts:67-68`). Failure keeps it, counts the attempt, records the error and
-  pushes `due_at` back 5 s, doubling, capped at 10 minutes; it is never dropped (`adapters/scheduler-alarm/src/index.ts:14-15`, `adapters/scheduler-alarm/src/index.ts:69-73`).
+- Success deletes the row (`adapters/scheduler-alarm/src/index.ts:127-128`). Failure keeps it, counts the attempt, records the error and
+  pushes `due_at` back 5 s, doubling, capped at 10 minutes; it is never dropped (`adapters/scheduler-alarm/src/index.ts:40-41`, `adapters/scheduler-alarm/src/index.ts:129-136`).
 - After the run it always sets the next alarm, and it never throws, because Cloudflare retries a
-  throwing alarm only 6 times (`adapters/scheduler-alarm/src/index.ts:90-98`).
+  throwing alarm only 6 times (`adapters/scheduler-alarm/src/index.ts:149-155`).
 
 Alarms can fire more than once, so a job may run twice. That is safe: a2's drains, and its
-appends and clears keyed by id, can be repeated (`adapters/scheduler-alarm/src/index.ts:36-39`).
+appends and clears keyed by id, can be repeated (`adapters/scheduler-alarm/src/index.ts:68-70`).
 
 ## Why not Board's own scheduler
 
@@ -86,7 +87,7 @@ Board's `local()` backend uses `localScheduler()`, which is `setTimeout` in memo
 restart drops pending timers (`node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:10573-10576`).
 A Durable Object is restarted whenever Cloudflare evicts it, so the spike found scheduled
 messages and retries dying on eviction (`spike/README.md:54-56`). The alarm adapter replaces it
-with the same job shapes (compare `adapters/scheduler-alarm/src/index.ts:53-60` with
+with the same job shapes (compare `adapters/scheduler-alarm/src/index.ts:98-113` with
 `node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:10508-10514`).
 
 ## Catch-up on the first request

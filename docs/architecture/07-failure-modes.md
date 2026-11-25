@@ -40,18 +40,18 @@ complete fails "Lost the claim" (`spike/README.md:19`). Details in [task leases]
 ## Durable Object restart
 
 Cloudflare restarts the object when it is evicted or redeployed, and our restore route restarts
-it on purpose (`hosts/cloudflare/src/ops.ts:22-23`).
+it on purpose (`hosts/cloudflare/src/ops.ts:50-51`, `hosts/cloudflare/src/index.ts:66-74`).
 
 - **Kept**: everything in SQLite — log, tables, and pending timers, because `schedule` writes the
-  row before it returns (`adapters/scheduler-alarm/src/index.ts:34-39`). The alarm time is stored
-  by Cloudflare and calls `alarm()` on a fresh object (`hosts/cloudflare/src/index.ts:58-61`).
+  row before it returns (`adapters/scheduler-alarm/src/index.ts:65-75`). The alarm time is stored
+  by Cloudflare and calls `alarm()` on a fresh object (`hosts/cloudflare/src/index.ts:61-64`).
 - **Lost**: what was only in memory. Open SSE streams close; the SDK reconnects from the last
   event it saw (`node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1815-1824`). Board's caches
   of verified tokens and of reducer state start empty
   (`node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:4914-4917`,
   `node_modules/@vercel/board/dist/internal-CvsrprnU-CEPOUpAv.mjs:171-182`).
-- **On the next request** the constructor runs again and rewires everything
-  (`hosts/cloudflare/src/index.ts:36-51`); all table creation is `if not exists`
+- **On the next request** the constructor runs again and builds a new runtime
+  (`hosts/cloudflare/src/index.ts:34-54`); all table creation is `if not exists`
   ([persistence](03-persistence.md#sqlite-in-the-object)). The first Board call re-arms every
   pending scheduled message (`node_modules/@vercel/board/dist/local-RoMUU6QX.mjs:10463-10466`),
   and the first list read starts the tables catching up with the log
@@ -65,8 +65,8 @@ Both writers use real transactions on the object's SQLite:
 
 - Board's tables: `boardDb.commit` runs the claim and every write inside
   `driver.transaction` (`packages/sql/src/board-db.ts:18-23`), which is the object's
-  `transactionSync`, rolled back if the callback throws (`adapters/sql-do/src/index.ts:9-13`,
-  `adapters/sql-do/src/index.ts:25`).
+  `transactionSync`, rolled back if the callback throws (`adapters/sql-do/src/index.ts:15-19`,
+  `adapters/sql-do/src/index.ts:31`).
 - a2's log: our patch makes a2's `tx` call `transactionSync` when the database offers it
   (`node_modules/@vercel/board/dist/store-sqlite-D6fIszST.mjs:344-346`,
   `patches/@vercel%2Fboard@0.54.0.patch:29-32`); our stand-in offers it
@@ -91,17 +91,17 @@ rolls R2 back (`README.md:47-48`).
 
 ## Auth errors
 
-`tokenAuth` is Board's `authenticate` for one shared token
-(`adapters/auth-token/src/index.ts:6-21`):
+`makeTokenAuth` yields Board's `authenticate` for one shared token
+(`adapters/auth-token/src/index.ts:47-72`):
 
 | Case | What happens | Status | Source |
 |---|---|---|---|
-| no `Authorization` header | `tokenAuth` answers null; Board answers "missing bearer token" | 401 | `adapters/auth-token/src/index.ts:17`, `node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:4958`, `node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1890` |
-| wrong token | `HttpError(401, "unauthorized")`, compared in constant time | 401 | `adapters/auth-token/src/index.ts:18`, `adapters/auth-token/src/index.ts:23-28` |
-| right token | caller is the one owner person; `x-board-profile` picks which agent name it writes as | — | `adapters/auth-token/src/index.ts:19`, `node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:16-35`, `node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:5011-5026` |
-| wrong token on `/_ops/` | the Worker answers before the object sees it | 401 | `hosts/cloudflare/src/index.ts:66-67` |
-| token shorter than 32 chars, or bad owner id | the constructor throws, so every request fails | — | `adapters/auth-token/src/index.ts:11-15`, `hosts/cloudflare/src/index.ts:49` |
-| no `BOARD_PUBLIC_URL` with `NODE_ENV=production` | Board refuses to check tokens | 500 `no_board_url` | `node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:5381-5384`, `hosts/cloudflare/src/index.ts:47` |
+| no `Authorization` header | `authenticate` answers null; Board answers "missing bearer token" | 401 | `adapters/auth-token/src/index.ts:53`, `node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:4958`, `node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1890` |
+| wrong token | `HttpError(401, "unauthorized")`, compared in constant time | 401 | `adapters/auth-token/src/index.ts:54`, `adapters/auth-token/src/index.ts:68-69`, `adapters/auth-token/src/index.ts:74-79` |
+| right token | caller is the one owner person; `x-board-profile` picks which agent name it writes as | — | `adapters/auth-token/src/index.ts:55`, `node_modules/@vercel/board/dist/actors-D-u6bitG.mjs:16-35`, `node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:5011-5026` |
+| wrong token on `/_ops/` | the Worker answers before the object sees it | 401 | `hosts/cloudflare/src/index.ts:87-92` |
+| missing or short (< 32 chars) token, or bad owner id | the runtime build fails with a ConfigError; every request answers `{"error": "board could not start", "detail": …}` naming the variable, never the token | 500 | `adapters/auth-token/src/index.ts:16-43`, `hosts/cloudflare/src/index.ts:45-57`, `hosts/cloudflare/src/host.ts:69-78` |
+| no `BOARD_PUBLIC_URL` with `NODE_ENV=production` | Board refuses to check tokens | 500 `no_board_url` | `node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:5381-5384`, `hosts/cloudflare/src/host.ts:26-27` |
 
 Errors leave Board as JSON `{error: {code, message}}` (`node_modules/@vercel/board/dist/errors-DDfXnZ2b.mjs:1921-1930`).
 The SDK throws them as `BoardError`; the events stream treats any 4xx as final, so a revoked

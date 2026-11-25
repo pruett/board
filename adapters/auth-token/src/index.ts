@@ -1,5 +1,5 @@
 import { HttpError } from "@vercel/board"
-import { Config, ConfigProvider, Effect, Redacted, Schema } from "effect"
+import { Config, Effect, Redacted, Schema } from "effect"
 
 /** Who holds the token: one person. Agents name themselves with `--as <profile>`. */
 export type TokenOwner = { id: string; handle: string }
@@ -70,17 +70,6 @@ export const makeTokenAuth: Effect.Effect<Authenticate, Config.ConfigError> = Ef
       ),
     )
 })
-
-/**
- * The old Promise factory, kept until the host switches to `makeTokenAuth`. Throws on a bad
- * token or owner, as before.
- */
-export function tokenAuth(token: string, owner: TokenOwner): Authenticate {
-  const provider = ConfigProvider.fromUnknown({
-    BOARD_TOKEN: token, BOARD_OWNER_ID: owner.id, BOARD_OWNER_HANDLE: owner.handle,
-  })
-  return Effect.runSync(makeTokenAuth.pipe(Effect.provideService(ConfigProvider.ConfigProvider, provider)))
-}
 
 function timingSafeEqual(a: string, b: string): boolean {
   const x = new TextEncoder().encode(a), y = new TextEncoder().encode(b)

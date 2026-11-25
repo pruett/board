@@ -17,7 +17,7 @@ const toRow = (row: Record<string, SqlStorageValue>): Row => {
  * `transactionSync`, which rolls back when its callback throws; `sql.exec` itself refuses
  * BEGIN and SAVEPOINT.
  */
-export function doSqlDriver(storage: DoStorage["Service"]): SqlDriver {
+function doSqlDriver(storage: DoStorage["Service"]): SqlDriver {
   const { sql } = storage
   return {
     exec: (text) => void sql.exec(text).toArray(),

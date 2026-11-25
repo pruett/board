@@ -15,7 +15,7 @@ flowchart LR
   end
   subgraph DO["Durable Object: BoardObject (one)"]
     D1{"/_ops/?"}
-    D2["handleOps: bookmark, restore"]
+    D2["ops HttpRouter: bookmark, restore"]
     D3["team.fetch = Board's dispatch"]
     D4["route match → verify token<br/>→ call backend method"]
     D5["a2 backend: post, claim, events…"]
@@ -59,26 +59,38 @@ matches each route as a suffix of the path, so the same code serves `/api/board/
 ## Worker
 
 The Worker does two things. For `/_ops/` paths it checks the bearer token itself and answers
-401 if it is wrong (`hosts/cloudflare/src/index.ts:66-67`), because Board's own auth never sees
-those routes (`hosts/cloudflare/src/ops.ts:29-36`). Then it forwards every request to the one
-object named `board` (`hosts/cloudflare/src/index.ts:30`, `hosts/cloudflare/src/index.ts:68`).
+401 if it is wrong (`hosts/cloudflare/src/index.ts:87-92`), because Board's own auth never sees
+those routes (`hosts/cloudflare/src/ops.ts:82-96`). It reads `BOARD_TOKEN` through Effect Config
+from the env, as a Redacted value, on a small per-env runtime (`hosts/cloudflare/src/index.ts:77-83`).
+Then it forwards every request to the one object named `board`
+(`hosts/cloudflare/src/index.ts:26`, `hosts/cloudflare/src/index.ts:93`).
 There is no routing by board, team or channel: one object holds everything.
 
 ## Durable Object
 
-The object's constructor wires the adapters once per object start
-(`hosts/cloudflare/src/index.ts:36-51`):
+The object's constructor builds one Effect `ManagedRuntime` from `hostLayer`, once per object
+start, inside `ctx.blockConcurrencyWhile`, so no request or alarm runs before Board exists
+(`hosts/cloudflare/src/index.ts:34-54`). The layer (`hosts/cloudflare/src/host.ts:55-67`) turns
+the object's bindings into services (`DoStorage`, `R2`, `Alarm`, `OpsStorage`) and the Worker env
+into the `ConfigProvider`; `makeBoardHost` (`hosts/cloudflare/src/host.ts:23-44`) then builds:
 
-- one SQL driver on the object's storage (`hosts/cloudflare/src/index.ts:38`), registered under a
-  path so a2's log store can open it as if it were `node:sqlite`
-  (`hosts/cloudflare/src/index.ts:39-40`, `hosts/cloudflare/wrangler.jsonc:8`);
-- the log store and Board's tables on that same driver (`hosts/cloudflare/src/index.ts:41`);
-- the alarm scheduler on the object's alarm (`hosts/cloudflare/src/index.ts:42-45`);
+- the token check from `BOARD_TOKEN`, `BOARD_OWNER_ID`, `BOARD_OWNER_HANDLE`, and the public URL,
+  read first so a bad variable fails before storage is touched (`hosts/cloudflare/src/host.ts:24-27`);
+- one SQL driver on the object's storage, registered under `do:<id>` so a2's log store can open
+  it as if it were `node:sqlite`, and unregistered when the runtime is disposed
+  (`hosts/cloudflare/src/host.ts:58`, `adapters/sql-do/src/index.ts:39-57`, `hosts/cloudflare/wrangler.jsonc:8`);
+- the log store and Board's tables on that same driver (`hosts/cloudflare/src/host.ts:28-29`);
+- the alarm scheduler on the object's alarm (`hosts/cloudflare/src/host.ts:30`);
 - Board itself, with the a2 backend, R2 files and the token check
-  (`hosts/cloudflare/src/index.ts:46-50`).
+  (`hosts/cloudflare/src/host.ts:31-32`).
 
-`fetch` sends `/_ops/` to `handleOps` and everything else to `team.fetch`
-(`hosts/cloudflare/src/index.ts:53-56`). `team.fetch` is Board's `serve`, which calls
+A bad variable does not crash the constructor: the object answers 500
+`{"error": "board could not start", "detail": …}`, naming the variable but never the token
+(`hosts/cloudflare/src/index.ts:47-52`, `hosts/cloudflare/src/host.ts:69-78`).
+
+`fetch` runs on that runtime; it sends `/_ops/` to the ops router and everything else to
+`team.fetch` (`hosts/cloudflare/src/index.ts:56-59`, `hosts/cloudflare/src/host.ts:36-40`).
+`team.fetch` is Board's `serve`, which calls
 `dispatch` (`node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6492`,
 `node_modules/@vercel/board/dist/exports-JUhj5Bl3.mjs:6549`).
 
@@ -105,10 +117,10 @@ From there a post goes to [the log and tables](02-message-write.md).
 
 | Adapter | Gives Board | Source |
 |---|---|---|
-| `sql-do` | SQL on the object's SQLite; transactions via `transactionSync` | `adapters/sql-do/src/index.ts:14-27` |
+| `sql-do` | SQL on the object's SQLite; transactions via `transactionSync` | `adapters/sql-do/src/index.ts:15-37` |
 | `packages/sql` `boardDb` | Board's `Db` (tables) on that SQL | `packages/sql/src/board-db.ts:13-25` |
 | `packages/sql` `node-sqlite.ts` | a fake `node:sqlite` so a2's log store runs on the same SQL | `packages/sql/src/node-sqlite.ts:29-44` |
-| `blob-r2` | attachments in R2 | `adapters/blob-r2/src/index.ts:18-39` |
-| `scheduler-alarm` | delayed jobs as rows + one alarm | `adapters/scheduler-alarm/src/index.ts:40-101` |
-| `auth-token` | one shared token = one person | `adapters/auth-token/src/index.ts:10-21` |
+| `blob-r2` | attachments in R2 | `adapters/blob-r2/src/index.ts:26-67` |
+| `scheduler-alarm` | delayed jobs as rows + one alarm | `adapters/scheduler-alarm/src/index.ts:65-165` |
+| `auth-token` | one shared token = one person | `adapters/auth-token/src/index.ts:32-72` |
 | `packages/board-internals` | Board's unexported `a2`, `sqlTables`, … (via our patch) | `packages/board-internals/src/index.ts:47-61`, `patches/@vercel%2Fboard@0.54.0.patch:7-11` |

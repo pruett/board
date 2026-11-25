@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { ConfigProvider, Effect, Redacted } from "effect"
 import { HttpError } from "@vercel/board"
-import { makeTokenAuth, tokenAuth, TokenAuthConfig } from "@board/auth-token"
+import { makeTokenAuth, TokenAuthConfig } from "@board/auth-token"
 
 const TOKEN = "t".repeat(32)
 const valid = { BOARD_TOKEN: TOKEN, BOARD_OWNER_ID: "token:user:kevin", BOARD_OWNER_HANDLE: "kevin" }
@@ -70,12 +70,5 @@ describe("makeTokenAuth", () => {
     const error = await authenticate({ credential: "x".repeat(32) }).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(HttpError)
     expect((error as HttpError).status).toBe(401)
-  })
-})
-
-describe("tokenAuth (Promise factory)", () => {
-  test("still throws on a bad token and works on a good one", async () => {
-    expect(() => tokenAuth("short", { id: "token:user:kevin", handle: "kevin" })).toThrow()
-    expect(await tokenAuth(TOKEN, { id: "token:user:kevin", handle: "kevin" })({ credential: TOKEN })).not.toBeNull()
   })
 })

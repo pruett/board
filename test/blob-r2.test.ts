@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer, Schedule } from "effect"
-import { makeR2Blob, R2, r2Blob, type Bucket } from "@board/blob-r2"
+import { makeR2Blob, R2, type Bucket } from "@board/blob-r2"
 
 /** An in-memory stand-in for an R2 bucket that fails the first `failures` calls. */
 function fakeBucket(failures = 0) {
@@ -62,15 +62,5 @@ describe("makeR2Blob", () => {
     const blob = await make(bucket)
     await expect(blob.put("k", new Uint8Array([1]), "x")).rejects.toMatchObject({ _tag: "R2Error", op: "put", key: "k" })
     expect(state.calls).toBe(4)
-  })
-})
-
-describe("r2Blob (deprecated wrapper)", () => {
-  test("round trips under files/", async () => {
-    const { bucket, objects } = fakeBucket()
-    const blob = r2Blob(bucket)
-    await blob.put("abc", new Uint8Array([1, 2]), "image/png")
-    expect([...objects.keys()]).toEqual(["files/abc"])
-    expect(await blob.head!("abc")).toEqual({ size: 2 })
   })
 })
