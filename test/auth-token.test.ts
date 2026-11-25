@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { ConfigProvider, Effect, Redacted } from "effect"
 import { HttpError } from "@vercel/board"
-import { makeTokenAuth, TokenAuthConfig } from "@board/auth-token"
+import { makeTokenAuth, sha256Hex, TokenAuthConfig } from "@board/auth-token"
 
 const TOKEN = "t".repeat(32)
 const valid = { BOARD_TOKEN: TOKEN, BOARD_OWNER_ID: "token:user:kevin", BOARD_OWNER_HANDLE: "kevin" }
@@ -70,5 +70,59 @@ describe("makeTokenAuth", () => {
     const error = await authenticate({ credential: "x".repeat(32) }).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(HttpError)
     expect((error as HttpError).status).toBe(401)
+  })
+})
+
+describe("BOARD_TOKENS", () => {
+  const A = "a".repeat(40), B = "b".repeat(40)
+  const agentsEnv = async () => ({
+    ...valid,
+    BOARD_TOKENS: JSON.stringify({
+      [await sha256Hex(A)]: { id: "token:agent:implementer-1", handle: "implementer-1" },
+      [await sha256Hex(B)]: { id: "token:agent:implementer-2", handle: "implementer-2" },
+    }),
+  })
+
+  test("each agent token is its own principal; the person token is still the person", async () => {
+    const authenticate = Effect.runSync(makeTokenAuth.pipe(withEnv(await agentsEnv())))
+    expect(await authenticate({ credential: A })).toEqual({ id: "token:agent:implementer-1", kind: "person", handle: "implementer-1" })
+    expect(await authenticate({ credential: B })).toEqual({ id: "token:agent:implementer-2", kind: "person", handle: "implementer-2" })
+    expect(await authenticate({ credential: TOKEN })).toEqual({ id: "token:user:kevin", kind: "person", handle: "kevin" })
+    expect(await authenticate({})).toBeNull()
+  })
+
+  test("an unknown token is a 401, and a removed entry's token too", async () => {
+    const env = await agentsEnv()
+    const onlyA = { ...env, BOARD_TOKENS: JSON.stringify({ [await sha256Hex(A)]: { id: "token:agent:implementer-1", handle: "implementer-1" } }) }
+    const authenticate = Effect.runSync(makeTokenAuth.pipe(withEnv(onlyA)))
+    for (const credential of ["x".repeat(32), B]) {
+      const error = await authenticate({ credential }).catch((e: unknown) => e)
+      expect(error).toBeInstanceOf(HttpError)
+      expect((error as HttpError).status).toBe(401)
+    }
+  })
+
+  test("not JSON is a ConfigError naming BOARD_TOKENS without the text", async () => {
+    const message = await configError({ ...valid, BOARD_TOKENS: `{${A}` })
+    expect(message).toContain("BOARD_TOKENS")
+    expect(message).not.toContain(A)
+  })
+
+  test("a raw token where its hash belongs is refused without echoing it", async () => {
+    const message = await configError({ ...valid, BOARD_TOKENS: JSON.stringify({ [A]: { id: "token:agent:x", handle: "x" } }) })
+    expect(message).toContain("BOARD_TOKENS entry 1")
+    expect(message).not.toContain(A)
+  })
+
+  test("a bad owner, an array, or a duplicate id is refused", async () => {
+    const hash = await sha256Hex(A)
+    expect(await configError({ ...valid, BOARD_TOKENS: JSON.stringify({ [hash]: { id: "agent-1", handle: "a" } }) })).toContain("BOARD_TOKENS entry 1")
+    expect(await configError({ ...valid, BOARD_TOKENS: "[]" })).toContain("BOARD_TOKENS")
+    expect(await configError({ ...valid, BOARD_TOKENS: JSON.stringify({ [hash]: { id: "token:user:kevin", handle: "k2" } }) })).toContain("already taken")
+  })
+
+  test("absent is no agents", async () => {
+    const config = await Effect.runPromise(TokenAuthConfig.pipe(withEnv(valid)))
+    expect(config.agents.size).toBe(0)
   })
 })

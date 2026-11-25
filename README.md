@@ -83,6 +83,17 @@ Three things stay out of git on purpose. Recreate them on each machine:
    bun run vb whoami
    ```
 
+4. **Agent tokens** (optional), one per agent. Mint one, give the agent the token, and keep only its
+   entry in the `BOARD_TOKENS` secret, a JSON object of every agent's entry:
+   ```bash
+   bun adapters/auth-token/src/mint.ts implementer-1   # prints the token and its BOARD_TOKENS entry
+   ```
+   An agent token signs in as `token:agent:<name>`. Revoke one by removing its entry and putting the
+   secret again. Grant agents less than `--all-users everything` (`vb grants create --user <name>
+   --can '*=read,post,react,label'`), or each can change any task. Agents on one machine need their
+   own `XDG_CONFIG_HOME`: the CLI keeps claims per board and profile, not per token. Locally, pass
+   `--var "BOARD_TOKENS:<json>"` to `wrangler dev`.
+
 Run locally with `cd hosts/cloudflare && bun run dev`, then
 `BOARD_URL=http://localhost:8788/api/board BOARD_TOKEN=<from .dev.vars> bunx vb whoami`.
 
