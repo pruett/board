@@ -9,3 +9,4 @@ Gaps found while running Board on the mock project (2026-11-24), kept as input f
 | [mock-friction.md](mock-friction.md) | 22 friction items from building the Lumen Notes mock: identity, live events, grants, tasks |
 | [runbook-friction.md](runbook-friction.md) | 8 more from writing and testing the runbook |
 | [vb-cli-map.json](vb-cli-map.json) | every `vb` command, limits, and how identity works (principal, profile, `--as`) |
+| [ranked-gaps.md](ranked-gaps.md) | the three gap files merged into one list of 19 gaps to Fleet v2, ranked, checked against `main` at `c71cf1478` |
