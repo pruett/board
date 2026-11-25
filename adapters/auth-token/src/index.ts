@@ -1,18 +1,29 @@
 import { HttpError } from "@vercel/board"
+import { parseCan } from "@vercel/board/access"
 import { Config, ConfigProvider, Context, Effect, Option, Redacted, Result, Schema, Tracer } from "effect"
 
 /** Who holds a token: the person, from `BOARD_OWNER_*`, or one agent, from `BOARD_TOKENS`. */
 export type TokenOwner = { id: string; handle: string }
 
-/** What a caller presents: Board passes the bearer token, or nothing. */
-export type TokenRequest = { credential?: string | null }
+/** One agent: who it is, and its scope as `x-board-can` text (`*=read,post,react,label`). */
+export type AgentOwner = TokenOwner & { scope: string }
+
+/**
+ * What a caller presents: Board passes the bearer token, or nothing, and the request's claims.
+ * `claims.scope` is the request's `x-board-can`; for an agent token the adapter writes it.
+ */
+export type TokenRequest = { credential?: string | null; claims?: { scope: string | null } }
 
 /**
  * The caller a right token stands for. Agents are `person` too: Board's `hostPrincipal` takes
  * person, deployment, workflow or external, and only a person is let in by grants naming it
  * (`--user <name>`); any other host principal is refused unless it is a Vercel deployment.
+ * Board's `hostPrincipal` keeps only these fields, so an agent's scope travels in `claims.scope`.
  */
 export type TokenPrincipal = { id: string; kind: "person"; handle: string }
+
+/** What an agent may do when its entry names no `can`: read, post, react and label on every channel, never manage or sync. */
+export const DEFAULT_AGENT_CAN = { "*": ["read", "post", "react", "label"] } as const
 
 /** Board's `authenticate`: null when the request is not ours, a principal, or a 401 HttpError. */
 export type Authenticate = (request: TokenRequest) => Promise<TokenPrincipal | null>
@@ -33,7 +44,18 @@ const OwnerHandle = Schema.String.check(
   Schema.isPattern(/^\S{1,64}$/, { message: "owner handle must be 1-64 characters, no spaces" }),
 )
 
-const AgentOwner = Schema.Struct({ id: OwnerId, handle: OwnerHandle })
+// A grant's `can`: channel pattern -> permissions, or "all". Board's parseCan checks the patterns and names.
+const AgentCan = Schema.Record(Schema.String, Schema.Union([Schema.Literal("all"), Schema.Array(Schema.String)]))
+
+const AgentEntry = Schema.Struct({ id: OwnerId, handle: OwnerHandle, can: Schema.optional(AgentCan) })
+
+/** A `can` object as `x-board-can` text: `{"dev/": ["read"], "*": "all"}` is `dev/=read;*=all`. */
+function canText(can: Readonly<Record<string, "all" | ReadonlyArray<string>>>): string {
+  return Object.entries(can).map(([pattern, grant]) => `${pattern}=${grant === "all" ? "all" : grant.join(",")}`).join(";")
+}
+
+/** The user Board's grants see in a principal id: everything after the second colon (Board's `userIdOf`). */
+const userPart = (id: string) => id.split(":").slice(2).join(":")
 
 /** sha256 of a token, as 64 lowercase hex characters: the only form a token is stored in. */
 export async function sha256Hex(token: string): Promise<string> {
@@ -42,13 +64,13 @@ export async function sha256Hex(token: string): Promise<string> {
 }
 
 const HASH = /^[0-9a-f]{64}$/
-const ENTRY = `{"<sha256 hex of the token>": {"id": "token:agent:<name>", "handle": "<name>"}}`
+const ENTRY = `{"<sha256 hex of the token>": {"id": "token:agent:<name>", "handle": "<name>", "can": {"*": ["read","post","react","label"]}}}`
 
 /**
  * `BOARD_TOKENS` as hash -> owner, or why not. Messages name entries by position and never quote
  * the text: a token pasted where its hash belongs must not end up in a log.
  */
-function parseAgentTokens(json: string, person: TokenOwner): Result.Result<ReadonlyMap<string, TokenOwner>, string> {
+function parseAgentTokens(json: string, person: TokenOwner): Result.Result<ReadonlyMap<string, AgentOwner>, string> {
   let raw: unknown
   try {
     raw = JSON.parse(json)
@@ -58,31 +80,43 @@ function parseAgentTokens(json: string, person: TokenOwner): Result.Result<Reado
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return Result.fail(`BOARD_TOKENS must be a JSON object like ${ENTRY}`)
   }
-  const owners = new Map<string, TokenOwner>()
-  const ids = new Set([person.id]), handles = new Set([person.handle])
+  const owners = new Map<string, AgentOwner>()
+  const ids = new Set([person.id]), handles = new Set([person.handle]), users = new Set([userPart(person.id)])
   for (const [i, [hash, value]] of Object.entries(raw).entries()) {
     const at = `BOARD_TOKENS entry ${i + 1}`
     if (!HASH.test(hash)) return Result.fail(`${at}: key must be a token's sha256 as 64 lowercase hex characters (make one with mint.ts)`)
-    const owner = Schema.decodeUnknownOption(AgentOwner)(value)
-    if (Option.isNone(owner)) return Result.fail(`${at}: value must be {"id": "token:agent:<name>", "handle": "<name>"}`)
-    if (ids.has(owner.value.id)) return Result.fail(`${at}: id is already taken by BOARD_OWNER_ID or another entry`)
-    if (handles.has(owner.value.handle)) return Result.fail(`${at}: handle is already taken by BOARD_OWNER_HANDLE or another entry`)
-    ids.add(owner.value.id)
-    handles.add(owner.value.handle)
-    owners.set(hash, owner.value)
+    const entry = Schema.decodeUnknownOption(AgentEntry)(value)
+    if (Option.isNone(entry)) return Result.fail(`${at}: value must be {"id": "token:agent:<name>", "handle": "<name>"} with an optional "can": {"<channel pattern>": ["read", ...]}`)
+    const { id, handle, can } = entry.value
+    if (ids.has(id)) return Result.fail(`${at}: id is already taken by BOARD_OWNER_ID or another entry`)
+    if (users.has(userPart(id))) {
+      return Result.fail(`${at}: id ends in the same user as BOARD_OWNER_ID or another entry (the part after the second colon); Board's grants would treat them as one user`)
+    }
+    if (handles.has(handle)) return Result.fail(`${at}: handle is already taken by BOARD_OWNER_HANDLE or another entry`)
+    const scope = canText(can ?? DEFAULT_AGENT_CAN)
+    try {
+      parseCan(scope, `${at} can`)
+    } catch (error) {
+      return Result.fail(error instanceof Error ? error.message : `${at}: can is not a valid grant`)
+    }
+    ids.add(id)
+    users.add(userPart(id))
+    handles.add(handle)
+    owners.set(hash, { id, handle, scope })
   }
   return Result.succeed(owners)
 }
 
 /**
  * The person's token and owner, from `BOARD_TOKEN`, `BOARD_OWNER_ID` and `BOARD_OWNER_HANDLE`, and the
- * agents' tokens, from the optional `BOARD_TOKENS`: a JSON object of sha256 hex -> `{ id, handle }`.
+ * agents' tokens, from the optional `BOARD_TOKENS`: a JSON object of sha256 hex -> `{ id, handle, can? }`,
+ * where `can` defaults to `DEFAULT_AGENT_CAN`.
  * A bad value fails with a ConfigError naming the variable; no token is ever in the message.
  */
 export const TokenAuthConfig: Config.Config<{
   token: Redacted.Redacted<string>
   owner: TokenOwner
-  agents: ReadonlyMap<string, TokenOwner>
+  agents: ReadonlyMap<string, AgentOwner>
 }> = Config.all({
   token: Config.schema(Schema.Redacted(Token), "BOARD_TOKEN"),
   owner: Config.all({
@@ -91,7 +125,7 @@ export const TokenAuthConfig: Config.Config<{
   }),
   agentsJson: Config.option(Config.Redacted("BOARD_TOKENS")),
 }).pipe(Config.flatMap(({ token, owner, agentsJson }) => {
-  if (Option.isNone(agentsJson)) return Config.succeed({ token, owner, agents: new Map<string, TokenOwner>() as ReadonlyMap<string, TokenOwner> })
+  if (Option.isNone(agentsJson)) return Config.succeed({ token, owner, agents: new Map<string, AgentOwner>() as ReadonlyMap<string, AgentOwner> })
   return Result.match(parseAgentTokens(Redacted.value(agentsJson.value), owner), {
     onFailure: (message) => Config.fail(new ConfigProvider.SourceError({ message })),
     onSuccess: (agents) => Config.succeed({ token, owner, agents }),
@@ -101,19 +135,30 @@ export const TokenAuthConfig: Config.Config<{
 /** A token that is not this board's. Becomes a 401 HttpError at the Promise edge. */
 export class WrongToken extends Schema.TaggedError<WrongToken>()("WrongToken", {}) {}
 
-/** Checks one request: the person's token, then the agents' by hash. No credential means another verifier may take it. */
+/** An agent token on a request that sent its own `x-board-can`, or with no claims to scope. Becomes a 403. */
+export class AgentScopeRefused extends Schema.TaggedError<AgentScopeRefused>()("AgentScopeRefused", {}) {}
+
+/**
+ * Checks one request: the person's token, then the agents' by hash. No credential means another verifier may take it.
+ * An agent's scope goes into `request.claims.scope`, the one place Board reads a principal's scope from: Board hands
+ * `authenticate` the same claims object `identify` reads after it, and never caches a host's principal, so this runs
+ * on every request. The board-scope regression test in test/auth-token.test.ts fails if a Board upgrade breaks it.
+ */
 const authenticate = Effect.fn("authToken.authenticate")(function* (
   token: Redacted.Redacted<string>,
   owner: TokenOwner,
-  agents: ReadonlyMap<string, TokenOwner>,
+  agents: ReadonlyMap<string, AgentOwner>,
   request: TokenRequest,
-): Effect.fn.Return<TokenPrincipal | null, WrongToken> {
+): Effect.fn.Return<TokenPrincipal | null, WrongToken | AgentScopeRefused> {
   const credential = request.credential
   if (!credential) return null
   if (timingSafeEqual(credential, Redacted.value(token))) return { id: owner.id, kind: "person", handle: owner.handle }
   // Looked up by hash, so timing says nothing about any token.
   const agent = agents.size === 0 ? undefined : agents.get(yield* Effect.promise(() => sha256Hex(credential)))
   if (!agent) return yield* new WrongToken()
+  // Fail closed: without claims there is nowhere to put the scope, and a client's own scope would replace ours.
+  if (!request.claims || request.claims.scope !== null) return yield* new AgentScopeRefused()
+  request.claims.scope = agent.scope
   return { id: agent.id, kind: "person", handle: agent.handle }
 })
 
@@ -127,8 +172,11 @@ export const makeTokenAuth: Effect.Effect<Authenticate, Config.ConfigError> = Ef
   return (request) =>
     Effect.runPromiseWith(ctx)(
       authenticate(token, owner, agents, request).pipe(
-        Effect.catchTag("WrongToken", () =>
-          Effect.fail(new HttpError(401, "unauthorized", "that token is not this board's"))),
+        Effect.catchTags({
+          WrongToken: () => Effect.fail(new HttpError(401, "unauthorized", "that token is not this board's")),
+          AgentScopeRefused: () => Effect.fail(new HttpError(403, "forbidden",
+            "an agent token can't send x-board-can: an agent's scope is the can in its BOARD_TOKENS entry, and an agent can't widen or narrow its own scope")),
+        }),
       ),
     )
 })
