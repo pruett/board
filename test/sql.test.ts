@@ -6,6 +6,9 @@ import { board } from "@vercel/board"
 import { a2, a2SqliteStore, memoryBlob, sqlTables } from "@board/internals"
 import { nodeSqlDriver } from "@board/sql-node"
 import { boardDb, registerDriver, type SqlDriver } from "@board/sql"
+import { DatabaseSync } from "@board/sql/node-sqlite"
+import { DoSql, DoStorage, doSqlPath } from "@board/sql-do"
+import { Context, Effect, Exit, Layer, Scope } from "effect"
 
 const cleanups: Array<() => void> = []
 afterEach(() => { while (cleanups.length) cleanups.pop()!() })
@@ -65,4 +68,33 @@ test("a2's log store runs on the stand-in, not on a file", async () => {
   const { existsSync } = await import("node:fs")
   open(nodeSqlDriver(":memory:"), "stand-in-check")
   expect(existsSync("stand-in-check")).toBe(false)
+})
+
+/** A Durable Object's `ctx.storage`, faked on the real node:sqlite (single statements only). */
+function fakeDoStorage(): DoStorage["Service"] {
+  const { DatabaseSync: Real } = process.getBuiltinModule("node:sqlite") as typeof import("node:sqlite")
+  const db = new Real(":memory:")
+  const sql = {
+    exec: (text: string, ...values: unknown[]) => {
+      const rows = db.prepare(text).all(...(values as never[]))
+      return { toArray: () => rows }
+    },
+  }
+  return { sql, transactionSync: <T>(fn: () => T) => fn() } as unknown as DoStorage["Service"]
+}
+
+describe("DoSql.layerRegistered", () => {
+  test("registers the driver under do:<id> and removes it when the scope closes", async () => {
+    const layer = DoSql.layerRegistered("obj-1").pipe(Layer.provide(Layer.succeed(DoStorage, fakeDoStorage())))
+    const scope = Effect.runSync(Scope.make())
+    const ctx = await Effect.runPromise(Layer.buildWithScope(layer, scope))
+
+    const db = new DatabaseSync(doSqlPath("obj-1"))
+    db.exec("create table t (x integer)")
+    expect(db.prepare("insert into t values (?)").run(7)).toEqual({ changes: 1 })
+    expect(Context.get(ctx, DoSql).all("select x from t", [])).toEqual([{ x: 7 }])
+
+    await Effect.runPromise(Scope.close(scope, Exit.void))
+    expect(() => new DatabaseSync("do:obj-1")).toThrow("no driver registered for do:obj-1")
+  })
 })
