@@ -1,5 +1,5 @@
 import { HttpError } from "@vercel/board"
-import { Config, Effect, Redacted, Schema } from "effect"
+import { Config, Context, Effect, Redacted, Schema, Tracer } from "effect"
 
 /** Who holds the token: one person. Agents name themselves with `--as <profile>`. */
 export type TokenOwner = { id: string; handle: string }
@@ -61,7 +61,7 @@ const authenticate = Effect.fn("authToken.authenticate")(function* (
  */
 export const makeTokenAuth: Effect.Effect<Authenticate, Config.ConfigError> = Effect.gen(function* () {
   const { token, owner } = yield* TokenAuthConfig
-  const ctx = yield* Effect.context<never>()
+  const ctx = Context.omit(Tracer.ParentSpan)(yield* Effect.context<never>())
   return (request) =>
     Effect.runPromiseWith(ctx)(
       authenticate(token, owner, request).pipe(

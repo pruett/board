@@ -1,4 +1,4 @@
-import { Context, Effect, Schedule, Schema } from "effect"
+import { Context, Effect, Schedule, Schema, Tracer } from "effect"
 import type { BlobStore } from "@board/internals"
 
 /** The part of an R2 binding this adapter uses; a test can pass a fake. */
@@ -31,7 +31,7 @@ export type R2BlobOptions = {
  */
 export const makeR2Blob = Effect.fn("blob-r2.make")(function*(options: R2BlobOptions = {}): Effect.fn.Return<BlobStore, never, R2> {
   const bucket = yield* R2
-  const ctx = yield* Effect.context<never>()
+  const ctx = Context.omit(Tracer.ParentSpan)(yield* Effect.context<never>())
   const run = Effect.runPromiseWith(ctx)
   const prefix = options.prefix ?? "files/"
   const schedule = options.retry ?? defaultRetry
