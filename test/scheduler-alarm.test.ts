@@ -105,21 +105,90 @@ describe("makeAlarmScheduler", () => {
     expect(driver.all("select count(*) as n from board_scheduler", [])).toEqual([{ n: 0 }])
   })
 
-  test("with no mount at all, the alarm gives up after 30 s and backs the task off", async () => {
+  test("a mount after 31 seconds: rows untouched, alarm re-armed, next alarm delivers", async () => {
     const driver = nodeSqlDriver(":memory:")
     const alarm = fakeAlarm()
     const { scheduler, clock } = await testScheduler(driver, alarm.alarm, 1_000_000)
-    await scheduler.schedule({ version: 1, kind: "drain", contract: "c", sessionId: "s", dueAt: 999_000 })
+    await scheduler.schedule({ version: 1, kind: "drain", contract: "c", sessionId: "late-mount", dueAt: 999_000 })
 
-    const run = scheduler.onAlarm()
+    const pending = scheduler.onAlarm()
     await settle()
-    await Effect.runPromise(clock.adjust("30 seconds"))
-    await run
-    const [row] = driver.all("select attempts, due_at, last_error from board_scheduler", [])
-    expect(row?.attempts).toBe(1)
-    expect(Number(row?.due_at)).toBe(1_030_000 + 5_000)
-    expect(String(row?.last_error)).toContain("no servers mounted")
+    await Effect.runPromise(clock.adjust("31 seconds"))
+    await pending
+    // Not a task failure: no attempt counted, no error, due time unchanged; the alarm retries 5 s after the timeout.
+    expect(driver.all("select attempts, due_at, last_error from board_scheduler", []))
+      .toEqual([{ attempts: 0, due_at: 999_000, last_error: null }])
     expect(alarm.at()).toBe(1_035_000)
+
+    const drained: string[] = []
+    scheduler.handler(drainServer("c", drained))
+    await scheduler.onAlarm()
+    expect(drained).toEqual(["late-mount"])
+    expect(driver.all("select count(*) as n from board_scheduler", [])).toEqual([{ n: 0 }])
+  })
+
+  test("overlapping schedules keep the earliest alarm", async () => {
+    const driver = nodeSqlDriver(":memory:")
+    const getStarted = Promise.withResolvers<void>()
+    const firstGet = Promise.withResolvers<number | null>()
+    let at: number | null = null
+    let calls = 0
+    const alarm: Alarm["Service"] = {
+      get: () => {
+        if (++calls === 1) { getStarted.resolve(); return firstGet.promise }
+        return Promise.resolve(at)
+      },
+      set: async (next) => { at = next },
+    }
+    const { scheduler } = await testScheduler(driver, alarm, 1_000_000)
+    const later = scheduler.schedule({ version: 1, kind: "drain", contract: "c", sessionId: "later", dueAt: 1_009_000 })
+    await getStarted.promise                         // the first schedule() is parked on alarm.get()
+    await scheduler.schedule({ version: 1, kind: "drain", contract: "c", sessionId: "earlier", dueAt: 1_003_000 })
+    expect(at).toBe(1_003_000)
+    firstGet.resolve(null)
+    await later
+    expect(at).toBe(1_003_000)
+  })
+
+  test("persisted retry attempts double across restarts and cap at ten minutes", async () => {
+    const driver = nodeSqlDriver(":memory:")
+    const alarm = fakeAlarm()
+    const first = await testScheduler(driver, alarm.alarm)
+    await first.scheduler.schedule({ version: 1, kind: "drain", contract: "c", sessionId: "retry", dueAt: 999_000 })
+    for (let attempt = 1; attempt <= 10; attempt++) {
+      const [before] = driver.all("select due_at from board_scheduler", [])
+      const { scheduler, clock } = await testScheduler(driver, alarm.alarm, Number(before?.due_at))
+      const now = clock.currentTimeMillisUnsafe()
+      scheduler.handler({ contract: { name: "c" }, drain: async () => { throw new Error("delivery broken") } } as unknown as DrainableServer)
+      await scheduler.onAlarm()
+      const [row] = driver.all("select attempts, due_at, last_error from board_scheduler", [])
+      expect(row).toEqual({ attempts: attempt, due_at: now + Math.min(5_000 * 2 ** (attempt - 1), 600_000), last_error: "delivery broken" })
+    }
+  })
+
+  test("a due-row read failure is swallowed and the remaining task is re-armed", async () => {
+    const sql = nodeSqlDriver(":memory:")
+    let at: number | null = null
+    let sets = 0
+    const alarm: Alarm["Service"] = { get: async () => at, set: async (next) => { at = next; sets++ } }
+    const brokenRead: SqlDriver = {
+      exec: (text) => sql.exec(text),
+      all: (text, values) => {
+        if (text.includes("where due_at <=")) throw new Error("due read broken")
+        return sql.all(text, values)
+      },
+      run: (text, values) => sql.run(text, values),
+      transaction: (fn) => sql.transaction(fn),
+      close: () => sql.close(),
+    }
+    const { scheduler } = await testScheduler(brokenRead, alarm, 1_000_000)
+    await scheduler.schedule({ version: 1, kind: "drain", contract: "c", sessionId: "read-failure", dueAt: 999_000 })
+    scheduler.handler()
+    sets = 0
+    await expect(scheduler.onAlarm()).resolves.toBeUndefined()
+    expect(sets).toBe(1)
+    expect(at).toBe(1_000_000)
+    expect(sql.all("select attempts from board_scheduler", [])).toEqual([{ attempts: 0 }])
   })
 
   test("the same task scheduled twice is one row", async () => {
