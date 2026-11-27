@@ -16,7 +16,7 @@ Claude artifacts made for this project, copied here as Markdown on 2026-11-27 so
 The old Mac's Claude Code memory doesn't travel; these are its points that aren't recorded elsewhere in the repo.
 
 - **Use case.** pruett (CEO) built `fleet` (Captain → leads → workers, one-way, file inbox) by hand; its inbox works poorly. Board is the replacement messaging layer, human↔agent and agent↔agent. Agents keep typed roles with their own identities. Board stays agnostic to roles.
-- **Goals (2026-11-25).** Fleet v2 on Board; this project's own work is coordinated on the deployed board; identity first. Later: rerun the Lumen mock (`examples/mock-project/` in the agent-board project) with real per-agent identities.
+- **Goals (2026-11-25).** Fleet v2 on Board; this project's own work is coordinated on the deployed board; identity first. Later: rerun the Lumen mock (`examples/mock-project/`) with real per-agent identities.
 - **Toolchain.** Bun + TypeScript + Effect. Use what that gives (Bun's `.env` loading, `bun run` scripts, TS, Effect) before bash wrappers or new tools (mise and a bash `bin/vb` were rejected). Ask before stepping outside it.
 - **PRs.** One PR per branch, titled `1/N …` when ordered by dependency, short summaries. Merge docs, infra and cleanup yourself; for now pruett also said to merge everything else. Deploys, secrets, `/_ops` and token rotation always need pruett.
 - **Watching.** Run work through the board (hq + project channels) so pruett can watch it; `bun run vb inspect --port 4800` opens a local viewer.
